@@ -63,7 +63,9 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Редактор базы данных"))
+        MainWindow.setWindowTitle(
+            _translate("MainWindow", "Редактор базы данных")
+        )
         self.fileMenu.setTitle(_translate("MainWindow", "Файл"))
         self.structureMenu.setTitle(_translate("MainWindow", "Структура"))
         self.tableMenu.setTitle(_translate("MainWindow", "Таблица"))

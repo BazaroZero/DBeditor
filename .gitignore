@@ -6,3 +6,7 @@ venv/
 **__pycache__/
 **.pyc
 
+# Tests, linting, etc. cache
+**.mypy_cache/
+**.pytest_cache/
+**.sqlite
