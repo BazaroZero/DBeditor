@@ -1,63 +1,65 @@
-import sqlite3
+import os.path
+from pathlib import Path
 from sys import exit, argv
+from typing import Optional
 
 from PyQt5 import QtCore, QtWidgets
+
+from src.database import Database
 
 
 class DBeditor(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+        self._database: Optional[Database] = None
         self.setupUi()
 
-    def openDBfunc(self):
-        fname = QtWidgets.QFileDialog.getOpenFileName(
+    def on_database_open(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.centralwidget,
             "Выберите базу данных",
             "",
             "Все базы данных SQLite (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
-        if fname[0]:
-            self.con = sqlite3.connect(fname[0])
-            self.cur = self.con.cursor()
-            self.tables = self.cur.execute(
-                """SELECT name FROM sqlite_master 
-            WHERE type='table' AND name NOT LIKE 'sqlite%'"""
-            ).fetchall()
-            self.tableMenu = QtWidgets.QMenu("Таблица", self.menubar)
-            self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
-            for tableInd in range(len(self.tables)):
-                action = QtWidgets.QAction(
-                    self.tables[tableInd][0],
-                    self.menubar,
-                    checkable=True,
-                    checked=tableInd == 0,
-                )
-                self.tablesActionGroup.addAction(action)
-                self.tableMenu.addAction(action)
-            self.menubar.addAction(self.tableMenu.menuAction())
-            self.tablesActionGroup.triggered.connect(self.initTable)
-            self.initTable(self.tables[0][0])
-            self.setWindowTitle(
-                f'Редактор базы данных - {fname[0][fname[0].rfind("/") + 1:]}'
-            )
-            self.tableWidget.itemSelectionChanged.connect(self.saveItem)
-            self.tableWidget.itemChanged.connect(self.editBDfunc)
+        if not filename:
+            return
+        self._database = Database(filename)
+        tables = self._database.get_tables()
 
-    def createDBfunc(self):
-        fname = QtWidgets.QFileDialog.getSaveFileName(
+        self.tableMenu = QtWidgets.QMenu("Таблица", self.menubar)
+        self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
+        for i, table in enumerate(tables):
+            action = QtWidgets.QAction(
+                table, self.menubar, checkable=True, checked=i == 0
+            )
+            self.tablesActionGroup.addAction(action)
+            self.tableMenu.addAction(action)
+        self.menubar.addAction(self.tableMenu.menuAction())
+        self.tablesActionGroup.triggered.connect(
+            lambda sender: self.initTable(sender.text())
+        )
+
+        self.initTable(tables[0])
+        self.setWindowTitle(
+            f"Редактор базы данных - {os.path.basename(filename)}"
+        )
+        self.tableWidget.itemSelectionChanged.connect(self.saveItem)
+        self.tableWidget.itemChanged.connect(self.editBDfunc)
+
+    def on_database_create(self):
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(
             self.centralwidget,
             "Создайте базу данных",
             "",
             "Все базы данных SQLite (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
-        self.con = sqlite3.connect(fname[0])
-        self.cur = self.con.cursor()
+        self._database = Database(filename)
         self.setWindowTitle(
-            f'Редактор базы данных - {fname[0][fname[0].rfind("/") + 1:]}*'
+            f"Редактор базы данных - {os.path.basename(filename)}*"
         )
 
     def commitDBfunc(self):
-        self.con.commit()
+        self._connection.commit()
         self.setWindowTitle(self.windowTitle()[:-1])
         self.unsaved = False
 
@@ -92,19 +94,15 @@ class DBeditor(QtWidgets.QMainWindow):
             self.displayError(error)
 
     def initTable(self, action):
+        self.chosenTable = action
         self.tableWidget.blockSignals(True)
-        if isinstance(action, str):
-            self.chosenTable = action
-        else:
-            self.chosenTable = action.text()
-        data = self.cur.execute(f"SELECT * FROM {self.chosenTable}")
+        data = self._connection.execute(f"SELECT * FROM {self.chosenTable}")
         self.names = list(map(lambda x: x[0], data.description))
         data = data.fetchall()
         self.primeKeyTables = [
             self.names.index(col)
-            for col in self.cur.execute(
-                f"""SELECT name 
-                                FROM pragma_table_info('{self.chosenTable}') WHERE pk = 1"""
+            for col in self._connection.execute(
+                f"""SELECT name FROM pragma_table_info('{self.chosenTable}') WHERE pk = 1"""
             ).fetchall()[0]
         ]
         self.tableWidget.setColumnCount(len(self.names))
@@ -235,12 +233,15 @@ class DBeditor(QtWidgets.QMainWindow):
     def setupUi(self):
         self.setGeometry(200, 200, 770, 480)
         self.setWindowTitle("Редактор базы данных")
+
         self.centralwidget = QtWidgets.QWidget(self)
         self.setCentralWidget(self.centralwidget)
+
         self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 770, 21))
         self.fileMenu = QtWidgets.QMenu("Файл", self.menubar)
         self.setMenuBar(self.menubar)
+
         self.openDB = QtWidgets.QAction("Открыть", self.fileMenu)
         self.createDB = QtWidgets.QAction("Создать", self.fileMenu)
         self.commitDB = QtWidgets.QAction("Сохранить", self.fileMenu)
@@ -248,12 +249,15 @@ class DBeditor(QtWidgets.QMainWindow):
         self.fileMenu.addAction(self.createDB)
         self.fileMenu.addAction(self.commitDB)
         self.menubar.addAction(self.fileMenu.menuAction())
+
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
         self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
         self.gridLayout.addWidget(self.tableWidget, 0, 0, 1, 1)
-        self.openDB.triggered.connect(self.openDBfunc)
+
+        self.openDB.triggered.connect(self.on_database_open)
         self.commitDB.triggered.connect(self.commitDBfunc)
-        self.createDB.triggered.connect(self.createDBfunc)
+        self.createDB.triggered.connect(self.on_database_create)
+
         self.saved = True
 
 

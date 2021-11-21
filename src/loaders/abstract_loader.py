@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import Any, List, Generator
+from typing import Any, Dict, Iterator
+
+Row = Dict[str, Any]
 
 
-class AbstractLoader(ABC):
+class AbstractLoader(ABC, Iterator[Row]):
     @abstractmethod
-    def load_next(self) -> Generator[List[Any], None, None]:
+    def load_next(self) -> Row:
         pass
 
-    def __next__(self) -> Generator[List[Any], None, None]:
-        yield from self.load_next()
+    def __next__(self) -> Row:
+        return self.load_next()

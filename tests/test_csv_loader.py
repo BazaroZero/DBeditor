@@ -3,8 +3,8 @@ import pytest
 
 from src.loaders.csv_loader import CSVLoader
 
-ANSWER = [["a", "123", "b"], ["c", "456", "d"]]
-INPUT = "\n".join(map(lambda x: ",".join(x), ANSWER))
+ANSWER = [{"a": "a", "b": "123", "c": "b"}, {"a": "c", "b": "456", "c": "d"}]
+INPUT = "a,b,c\n" + "\n".join(map(lambda x: ",".join(x.values()), ANSWER))
 
 
 @pytest.fixture
@@ -13,6 +13,6 @@ def loader() -> CSVLoader:
     return CSVLoader(data)
 
 
-def test_load_next(loader):
-    for r, a in zip(loader.load_next(), ANSWER):
+def test_load_next(loader: CSVLoader) -> None:
+    for r, a in zip(loader, ANSWER):
         assert r == a
