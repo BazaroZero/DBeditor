@@ -9,4 +9,7 @@ show_column_numbers = true
 warn_no_return = false
 no_implicit_optional = false
 ignore_missing_imports = true
-exclude = ".git/, __pycache__/, ./venv/"
+exclude = '''(\.git/|__pycache__|venv)'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

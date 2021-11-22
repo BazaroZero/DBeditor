@@ -1,11 +1,10 @@
 import os.path
-from pathlib import Path
 from sys import exit, argv
 from typing import Optional
 
 from PyQt5 import QtCore, QtWidgets
 
-from src.database import Database
+from database import Database
 
 
 class DBeditor(QtWidgets.QMainWindow):
