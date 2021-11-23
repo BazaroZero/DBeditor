@@ -5,27 +5,28 @@ from typing import Optional
 from PyQt5 import QtCore, QtWidgets
 
 from database import Database
+from sqlalchemy.exc import SQLAlchemyError
 
 
 class DBeditor(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self._database: Optional[Database] = None
         self.setupUi()
 
-    def on_database_open(self):
+    def on_database_open(self) -> None:
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.centralwidget,
-            "Выберите базу данных",
+            "Select database",
             "",
-            "Все базы данных SQLite (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
+            "All SQLite databases (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
         if not filename:
             return
         self._database = Database(filename)
         tables = self._database.get_tables()
 
-        self.tableMenu = QtWidgets.QMenu("Таблица", self.menubar)
+        self.tableMenu = QtWidgets.QMenu("Table", self.menubar)
         self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
         for i, table in enumerate(tables):
             action = QtWidgets.QAction(
@@ -40,69 +41,70 @@ class DBeditor(QtWidgets.QMainWindow):
 
         self.initTable(tables[0])
         self.setWindowTitle(
-            f"Редактор базы данных - {os.path.basename(filename)}"
+            f"DBeditor - {os.path.basename(filename)}"
         )
         self.tableWidget.itemSelectionChanged.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editBDfunc)
 
-    def on_database_create(self):
+    def on_database_create(self) -> None:
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
             self.centralwidget,
-            "Создайте базу данных",
+            "Create database",
             "",
-            "Все базы данных SQLite (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
+            "All SQLite databases (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
         self._database = Database(filename)
         self.setWindowTitle(
-            f"Редактор базы данных - {os.path.basename(filename)}*"
+            f"DBeditor - {os.path.basename(filename)}*"
         )
 
-    def commitDBfunc(self):
+    def commitDBfunc(self) -> None:
         self._connection.commit()
         self.setWindowTitle(self.windowTitle()[:-1])
         self.unsaved = False
 
-    def saveItem(self):
+    def saveItem(self) -> None:
         self.selItems = self.tableWidget.selectedItems()
 
-    def displayError(self, err):
+    def displayError(self, err: str) -> None:
         msg = QtWidgets.QMessageBox(self)
         msg.setIcon(QtWidgets.QMessageBox.Critical)
         msg.setWindowTitle("Error")
         msg.setText(err)
         msg.exec_()
 
-    def editBDfunc(self, item):
+    def editBDfunc(self, item: QtWidgets.QTableWidgetItem) -> None:
         try:
-            self.cur.execute(
-                f"""UPDATE {self.chosenTable} SET {self.names[item.column()]} = ?
-                                    WHERE {self.names[self.primeKeyTables[0]]} = ?""",
-                (
-                    item.text(),
-                    self.tableWidget.item(
-                        item.row(), self.primeKeyTables[0]
-                    ).text(),
-                ),
-            )
+            # self.cur.execute(
+            #     f"""UPDATE {self.chosenTable} SET {self.names[item.column()]} = ?
+            #                         WHERE {self.names[self.primeKeyTables[0]]} = ?""",
+            #     (
+            #         item.text(),
+            #         self.tableWidget.item(
+            #             item.row(), self.primeKeyTables[0]
+            #         ).text(),
+            #     ),
+            # )
             self.saved = False
             self.setWindowTitle(self.windowTitle() + "*")
-        except sqlite3.Error as error:
+        except SQLAlchemyError as error:
             self.tableWidget.setItem(
                 self.selItems.row(), self.selItems.column(), self.selItems
             )
             self.displayError(error)
 
-    def initTable(self, action):
+    def initTable(self, action: QtWidgets.QAction) -> None:
         self.chosenTable = action
+        self.chosenTableLabel.setText(self.chosenTable)
         self.tableWidget.blockSignals(True)
         data = self._connection.execute(f"SELECT * FROM {self.chosenTable}")
         self.names = list(map(lambda x: x[0], data.description))
         data = data.fetchall()
         self.primeKeyTables = [
             self.names.index(col)
-            for col in self._connection.execute(
-                f"""SELECT name FROM pragma_table_info('{self.chosenTable}') WHERE pk = 1"""
-            ).fetchall()[0]
+            # for col in self._connection.execute(
+            #     f"""SELECT name FROM pragma_table_info('{self.chosenTable}') WHERE pk = 1"""
+            # ).fetchall()[0]
         ]
         self.tableWidget.setColumnCount(len(self.names))
         self.tableWidget.setHorizontalHeaderLabels(self.names)
@@ -124,13 +126,13 @@ class DBeditor(QtWidgets.QMainWindow):
             header.setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         self.tableWidget.blockSignals(False)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event) -> None:
         if not self.saved:
             msg = QtWidgets.QMessageBox(self.centralwidget)
             msg.setWindowTitle("")
             msg.setIcon(QtWidgets.QMessageBox.Question)
-            msg.setText("В базу данных были внесены изменения")
-            msg.setInformativeText("Сохранить?")
+            msg.setText("Changes were made to the database")
+            msg.setInformativeText("Do you want to save?")
             msg.setStandardButtons(
                 QtWidgets.QMessageBox.Save
                 | QtWidgets.QMessageBox.Discard
@@ -146,47 +148,41 @@ class DBeditor(QtWidgets.QMainWindow):
             else:
                 event.ignore()
 
-    def delRowDB(self):
+    def delRowDB(self) -> None:
         try:
             self.tableWidget.blockSignals(True)
             for selItem in self.selItems:
-                self.cur.execute(
-                    f"""DELETE from {self.chosenTable} 
-                                    WHERE {self.names[self.primeKeyTables[0]]} = ?""",
-                    (
-                        self.tableWidget.item(
-                            selItem.row(), self.primeKeyTables[0]
-                        ).text(),
-                    ),
-                )
+                # self.cur.execute(
+                #     f"""DELETE from {self.chosenTable} 
+                #                     WHERE {self.names[self.primeKeyTables[0]]} = ?""",
+                #     (
+                #         self.tableWidget.item(
+                #             selItem.row(), self.primeKeyTables[0]
+                #         ).text(),
+                #     ),
+                # )
                 self.tableWidget.removeRow(selItem.row())
             self.saved = False
             if not self.windowTitle().endswith("*"):
                 self.setWindowTitle(self.windowTitle() + "*")
             self.tableWidget.blockSignals(False)
-        except sqlite3.Error as error:
+        except SQLAlchemyError as error:
             self.tableWidget.setItem(
                 self.selItems.row(), self.selItems.column(), self.selItems
             )
             self.displayError(error)
 
-    def addRowBD(self):
+    def addRowBD(self) -> None:
         try:
-            self.cur.execute(
-                f"""INSERT INTO {self.chosenTable} DEFAULT VALUES"""
-            )
-            return self.cur.execute(
-                f"""SELECT * FROM {self.chosenTable} 
-                                    WHERE {self.names[self.primeKeyTables[0]]} = 
-                                    (SELECT MAX({self.names[self.primeKeyTables[0]]}) FROM {self.chosenTable})"""
-            ).fetchone()
-        except sqlite3.Error as error:
+           pass
+           # НОВЫЙ МЕХАНИЗМ ДОБАВЛЕНИЯ
+        except SQLAlchemyError as error:
             self.tableWidget.setItem(
                 self.selItems.row(), self.selItems.column(), self.selItems
             )
             self.displayError(error)
 
-    def addBottomRow(self):
+    def addBottomRow(self) -> None:
         self.tableWidget.blockSignals(True)
         data = self.addRowBD()
         self.tableWidget.insertRow(self.selItems[-1].row() + 1)
@@ -201,7 +197,7 @@ class DBeditor(QtWidgets.QMainWindow):
             self.setWindowTitle(self.windowTitle() + "*")
         self.tableWidget.blockSignals(False)
 
-    def addTopRow(self):
+    def addTopRow(self) -> None:
         self.tableWidget.blockSignals(True)
         data = self.addRowBD()
         self.tableWidget.insertRow(self.selItems[-1].row())
@@ -216,11 +212,23 @@ class DBeditor(QtWidgets.QMainWindow):
             self.setWindowTitle(self.windowTitle() + "*")
         self.tableWidget.blockSignals(False)
 
-    def contextMenuEvent(self, event):
+    def executeCustomQuery(self) -> None:
+        # ВЫПОЛНЕНИЕ КАСТОМНОГО ЗАПРОСА
+        self.customQueryWindow.close()
+        self.customQueryWindow = None
+
+    def contextMenuEvent(self, event) -> None:
         contextMenu = QtWidgets.QMenu(self)
-        self.addTopAct = contextMenu.addAction("Добавить строку сверху")
-        self.addBottomAct = contextMenu.addAction("Добавить строку снизу")
-        self.delAct = contextMenu.addAction("Удалить")
+        self.customQueryAct = QtWidgets.QAction("Custom query", self)
+        self.customQueryAct.setShortcut("Ctrl+Q")
+        contextMenu.addAction(self.customQueryAct)
+        self.addTopAct = QtWidgets.QAction("Add line on top", self)
+        contextMenu.addAction(self.addTopAct)
+        self.addBottomAct = QtWidgets.QAction("Add line below", self)
+        contextMenu.addAction(self.addBottomAct)
+        self.delAct =  QtWidgets.QAction("Delete", self)
+        self.delAct.setShortcut("Del")
+        contextMenu.addAction(self.delAct)
         action = contextMenu.exec_(self.mapToGlobal(event.pos()))
         if action == self.delAct:
             self.delRowDB()
@@ -228,38 +236,77 @@ class DBeditor(QtWidgets.QMainWindow):
             self.addTopRow()
         elif action == self.addBottomAct:
             self.addBottomRow()
+        elif action == self.customQueryAct:
+            self.customQueryWindow = customQueryWindow()
+            self.customQueryWindow.show()
+            self.customQueryWindow.execute.clicked.connect(self.executeCustomQuery)
 
-    def setupUi(self):
-        self.setGeometry(200, 200, 770, 480)
-        self.setWindowTitle("Редактор базы данных")
+    def searchAcrossTable(self) -> None:
+        self.tableWidget.setCurrentItem(None)
+        if self.search:
+            matchingItems = self.table.findItems(self.search, QtCore.Qt.MatchContains)
+            if matchingItems:
+                for item in matchingItems:
+                    item.setSelected(True)
 
+    def setupUi(self) -> None:
+        self.setWindowTitle("DBeditor")
+        self.resize(569, 425)
         self.centralwidget = QtWidgets.QWidget(self)
+        self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
+        self.search = QtWidgets.QLineEdit(self.centralwidget)
+        self.search.setPlaceholderText("Type here to search...")
+        self.gridLayout.addWidget(self.search, 0, 0, 1, 1)
+        self.startSearch = QtWidgets.QPushButton("Search", self.centralwidget)
+        self.gridLayout.addWidget(self.startSearch, 0, 1, 1, 1)
+        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
+        self.tableWidget.setColumnCount(0)
+        self.tableWidget.setRowCount(0)
+        self.gridLayout.addWidget(self.tableWidget, 2, 0, 1, 2)
+        self.chosenTableLabel = QtWidgets.QLabel(self.centralwidget)
+        self.chosenTableLabel.setText("")
+        self.gridLayout.addWidget(self.chosenTableLabel, 1, 0, 1, 1)
         self.setCentralWidget(self.centralwidget)
-
         self.menubar = QtWidgets.QMenuBar(self)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 770, 21))
-        self.fileMenu = QtWidgets.QMenu("Файл", self.menubar)
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 569, 21))
+        self.fileMenu = QtWidgets.QMenu("File", self.menubar)
         self.setMenuBar(self.menubar)
-
-        self.openDB = QtWidgets.QAction("Открыть", self.fileMenu)
-        self.createDB = QtWidgets.QAction("Создать", self.fileMenu)
-        self.commitDB = QtWidgets.QAction("Сохранить", self.fileMenu)
+        self.openDB = QtWidgets.QAction("Open DB", self)
+        self.createDB = QtWidgets.QAction("Create DB", self)
+        self.commitDB = QtWidgets.QAction("Save DB", self)
+        self.commitDB.setShortcut("Ctrl+S")
+        
         self.fileMenu.addAction(self.openDB)
         self.fileMenu.addAction(self.createDB)
         self.fileMenu.addAction(self.commitDB)
         self.menubar.addAction(self.fileMenu.menuAction())
 
-        self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
-        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
-        self.gridLayout.addWidget(self.tableWidget, 0, 0, 1, 1)
-
         self.openDB.triggered.connect(self.on_database_open)
         self.commitDB.triggered.connect(self.commitDBfunc)
         self.createDB.triggered.connect(self.on_database_create)
+        self.startSearch.clicked.connect(self.searchAcrossTable)
 
         self.saved = True
+        self.customQueryWindow = None
 
 
+class customQueryWindow(QtWidgets.QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setupUi()
+
+    def setupUi(self) -> None:
+        self.setWindowTitle("Custom query window")
+        self.resize(398, 282)
+        self.gridLayout = QtWidgets.QGridLayout(self)
+        self.label = QtWidgets.QLabel("Type your query:", self)
+        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
+        self.query = QtWidgets.QPlainTextEdit(self)
+        self.gridLayout.addWidget(self.query, 1, 0, 1, 2)
+        self.execute = QtWidgets.QPushButton("Search", self)
+        self.gridLayout.addWidget(self.execute, 2, 1, 1, 1)
+
+       
 if __name__ == "__main__":
     app = QtWidgets.QApplication(argv)
     ex = DBeditor()
