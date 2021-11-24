@@ -1,7 +1,7 @@
-from typing import List, Any
+from typing import List, Any, Dict
 from sqlalchemy import create_engine, MetaData, Table
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 
 
 class Database:
@@ -15,6 +15,10 @@ class Database:
     def engine(self) -> Engine:
         return self._engine
 
+    @property
+    def session(self) -> Session:
+        return self._session()
+
     def get_tables(self) -> List[str]:
         user_tables = filter(
             lambda x: x != "sqlite_sequence", self._metadata.tables.keys()
@@ -27,3 +31,29 @@ class Database:
 
     def get_table(self, name: str) -> Table:
         return self._metadata.tables[name]
+
+    # TODO: create class for this operations
+    def select_all(self, table_name: str) -> List[Any]:
+        table = self.get_table(table_name)
+        with self.session as session:
+            return session.query(table).all()  # type: ignore
+
+    def insert_row(self, table_name: str, row: Dict[str, Any]) -> None:
+        table = self.get_table(table_name)
+        with self.session as session:
+            session.execute(table.insert().values(**row))
+            session.commit()
+
+    def delete_row(self, table_name: str, pks: Dict[str, Any]) -> None:
+        table = self.get_table(table_name)
+        with self.session as session:
+            session.query(table).filter_by(**pks).delete()
+            session.commit()
+
+    def update_row(
+        self, table_name: str, pks: Dict[str, Any], new_values: Dict[str, Any]
+    ) -> None:
+        table = self.get_table(table_name)
+        with self.session as session:
+            session.query(table).filter_by(**pks).update(new_values)
+            session.commit()

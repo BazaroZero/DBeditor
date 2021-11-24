@@ -40,9 +40,7 @@ class DBeditor(QtWidgets.QMainWindow):
         )
 
         self.initTable(tables[0])
-        self.setWindowTitle(
-            f"DBeditor - {os.path.basename(filename)}"
-        )
+        self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemSelectionChanged.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editBDfunc)
 
@@ -54,9 +52,7 @@ class DBeditor(QtWidgets.QMainWindow):
             "All SQLite databases (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
         self._database = Database(filename)
-        self.setWindowTitle(
-            f"DBeditor - {os.path.basename(filename)}*"
-        )
+        self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}*")
 
     def commitDBfunc(self) -> None:
         self._connection.commit()
@@ -97,9 +93,8 @@ class DBeditor(QtWidgets.QMainWindow):
         self.chosenTable = action
         self.chosenTableLabel.setText(self.chosenTable)
         self.tableWidget.blockSignals(True)
-        data = self._connection.execute(f"SELECT * FROM {self.chosenTable}")
-        self.names = list(map(lambda x: x[0], data.description))
-        data = data.fetchall()
+        data = self._database.select_all(self.chosenTable)
+        self.names = self._database.get_table_column_names(self.chosenTable)
         self.primeKeyTables = [
             self.names.index(col)
             # for col in self._connection.execute(
@@ -153,7 +148,7 @@ class DBeditor(QtWidgets.QMainWindow):
             self.tableWidget.blockSignals(True)
             for selItem in self.selItems:
                 # self.cur.execute(
-                #     f"""DELETE from {self.chosenTable} 
+                #     f"""DELETE from {self.chosenTable}
                 #                     WHERE {self.names[self.primeKeyTables[0]]} = ?""",
                 #     (
                 #         self.tableWidget.item(
@@ -174,8 +169,8 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def addRowBD(self) -> None:
         try:
-           pass
-           # НОВЫЙ МЕХАНИЗМ ДОБАВЛЕНИЯ
+            pass
+            # НОВЫЙ МЕХАНИЗМ ДОБАВЛЕНИЯ
         except SQLAlchemyError as error:
             self.tableWidget.setItem(
                 self.selItems.row(), self.selItems.column(), self.selItems
@@ -226,7 +221,7 @@ class DBeditor(QtWidgets.QMainWindow):
         contextMenu.addAction(self.addTopAct)
         self.addBottomAct = QtWidgets.QAction("Add line below", self)
         contextMenu.addAction(self.addBottomAct)
-        self.delAct =  QtWidgets.QAction("Delete", self)
+        self.delAct = QtWidgets.QAction("Delete", self)
         self.delAct.setShortcut("Del")
         contextMenu.addAction(self.delAct)
         action = contextMenu.exec_(self.mapToGlobal(event.pos()))
@@ -239,12 +234,16 @@ class DBeditor(QtWidgets.QMainWindow):
         elif action == self.customQueryAct:
             self.customQueryWindow = customQueryWindow()
             self.customQueryWindow.show()
-            self.customQueryWindow.execute.clicked.connect(self.executeCustomQuery)
+            self.customQueryWindow.execute.clicked.connect(
+                self.executeCustomQuery
+            )
 
     def searchAcrossTable(self) -> None:
         self.tableWidget.setCurrentItem(None)
         if self.search:
-            matchingItems = self.table.findItems(self.search, QtCore.Qt.MatchContains)
+            matchingItems = self.table.findItems(
+                self.search, QtCore.Qt.MatchContains
+            )
             if matchingItems:
                 for item in matchingItems:
                     item.setSelected(True)
@@ -275,7 +274,7 @@ class DBeditor(QtWidgets.QMainWindow):
         self.createDB = QtWidgets.QAction("Create DB", self)
         self.commitDB = QtWidgets.QAction("Save DB", self)
         self.commitDB.setShortcut("Ctrl+S")
-        
+
         self.fileMenu.addAction(self.openDB)
         self.fileMenu.addAction(self.createDB)
         self.fileMenu.addAction(self.commitDB)
@@ -306,7 +305,7 @@ class customQueryWindow(QtWidgets.QWidget):
         self.execute = QtWidgets.QPushButton("Search", self)
         self.gridLayout.addWidget(self.execute, 2, 1, 1, 1)
 
-       
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication(argv)
     ex = DBeditor()

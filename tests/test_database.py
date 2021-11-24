@@ -15,6 +15,8 @@ CREATE TABLE second (
     data INT,
     date DATE
 );
+
+INSERT INTO first(name) VALUES ('lorem'), ('ipsum');
 """
 
 
@@ -31,3 +33,26 @@ def test_get_tables(database: Database) -> None:
 
 def test_get_table_column_names(database: Database) -> None:
     assert database.get_table_column_names("first") == ["id", "name"]
+
+
+def test_get_select_all(database: Database) -> None:
+    assert database.select_all("first") == [(1, "lorem"), (2, "ipsum")]
+
+
+def test_insert_row(database: Database) -> None:
+    database.insert_row("first", {"name": "hello"})
+    assert database.select_all("first") == [
+        (1, "lorem"),
+        (2, "ipsum"),
+        (3, "hello"),
+    ]
+
+
+def test_delete_row(database: Database) -> None:
+    database.delete_row("first", {"id": 1})
+    assert database.select_all("first") == [(2, "ipsum")]
+
+
+def test_update_row(database: Database) -> None:
+    database.update_row("first", {"id": 1}, {"name": "test"})
+    assert database.select_all("first") == [(1, "test"), (2, "ipsum")]
