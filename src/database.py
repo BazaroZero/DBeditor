@@ -1,5 +1,6 @@
 from typing import List, Any, Dict
 from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy.inspection import inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -28,6 +29,9 @@ class Database:
     def get_table_column_names(self, table_name: str) -> List[str]:
         table: Table = self._metadata.tables[table_name]
         return table.columns.keys()  # type: ignore
+
+    def get_pk_column_names(self, name: str) -> List[str]:
+        return [key.name for key in inspect(self.get_table(name)).primary_key]
 
     def get_table(self, name: str) -> Table:
         return self._metadata.tables[name]
