@@ -1,4 +1,5 @@
 from sqlite3 import connect
+from sqlalchemy.exc import IntegrityError
 
 import pytest
 
@@ -56,3 +57,9 @@ def test_delete_row(database: Database) -> None:
 def test_update_row(database: Database) -> None:
     database.update_row("first", {"id": 1}, {"name": "test"})
     assert database.select_all("first") == [(1, "test"), (2, "ipsum")]
+
+
+def test_update_row_exception(database: Database) -> None:
+    with pytest.raises(IntegrityError):
+        database.update_row("first", {"id": 1}, {"id": 2})
+
