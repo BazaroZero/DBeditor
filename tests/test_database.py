@@ -63,3 +63,7 @@ def test_update_row_exception(database: Database) -> None:
     with pytest.raises(IntegrityError):
         database.update_row("first", {"id": 1}, {"id": 2})
 
+
+def test_raw_execute(database: Database) -> None:
+    result = database.execute_raw("select name from first where id = :id", id=2)
+    assert list(result) == [("ipsum",)]

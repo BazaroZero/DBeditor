@@ -1,6 +1,5 @@
 from typing import List, Any, Dict
-from sqlalchemy import create_engine, MetaData, Table
-from sqlalchemy.inspection import inspect
+from sqlalchemy import create_engine, MetaData, Table, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -61,3 +60,8 @@ class Database:
         with self.session as session:
             session.query(table).filter_by(**pks).update(new_values)
             session.commit()
+
+    def execute_raw(self, query: str, **args: Any) -> Any:
+        statement = text(query)
+        with self.engine.connect() as connection:
+            return connection.execute(statement, **args)
