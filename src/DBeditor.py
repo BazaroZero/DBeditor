@@ -55,7 +55,7 @@ class DBeditor(QtWidgets.QMainWindow):
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}*")
 
     def saveItem(self, item: QtWidgets.QTableWidgetItem) -> None:
-        self.selItem = item.text()
+        self.selItemText = item.text()
         self.addrToDBRow = self.findRowFromUI(item.row())
 
     def displayError(self, err: str) -> None:
@@ -78,7 +78,7 @@ class DBeditor(QtWidgets.QMainWindow):
             self.displayError(str(error.__dict__['orig']))
             self.tableWidget.setItem(
                 item.row(), item.column(), 
-                QtWidgets.QTableWidgetItem(self.selItem)
+                QtWidgets.QTableWidgetItem(self.selItemText)
             )
 
     def initTable(self, action: QtWidgets.QAction) -> None:
@@ -103,58 +103,50 @@ class DBeditor(QtWidgets.QMainWindow):
             header.setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
         self.tableWidget.blockSignals(False)
 
-    def delRowDB(self) -> None:
+    def delRowDBnUI(self) -> None:
         try:
             self.tableWidget.blockSignals(True)
+            self.selItems = self.tableWidget.selectedItems()
             for selItem in self.selItems:
-                self._database.delete_row(self.chosenTable, self.addrToDBRow)
+                self._database.delete_row(self.chosenTable, self.findRowFromUI(selItem.row()))
                 self.tableWidget.removeRow(selItem.row())
             self.tableWidget.blockSignals(False)
         except SQLAlchemyError as error:
-            self.tableWidget.setItem(
-                self.selItems.row(), self.selItems.column(), self.selItems
-            )
-            self.displayError(error)
+            self.displayError(str(error.__dict__['orig']))
 
     # TODO: Insert row with default values
     def addRowBD(self) -> None:
         try:
-            pass
-            # self._database.insert_row(self.chosenTable)
+            self._database.insert_row(self.chosenTable, {})
         except SQLAlchemyError as error:
             self.tableWidget.setItem(
                 self.selItems.row(), self.selItems.column(), self.selItems
             )
             self.displayError(error)
 
-    def addBottomRow(self) -> None:
+    def addBottomRowUI(self) -> None:
         self.tableWidget.blockSignals(True)
-        data = self.addRowBD()
+        self.selItems = self.tableWidget.selectedItems()
         self.tableWidget.insertRow(self.selItems[-1].row() + 1)
         for col in range(len(self.names)):
             self.tableWidget.setItem(
                 self.selItems[-1].row() + 1,
                 col,
-                QtWidgets.QTableWidgetItem(str(data[col])),
+                QtWidgets.QTableWidgetItem(''),
             )
-        self.saved = False
-        # if not self.windowTitle().endswith("*"):
-        #     self.setWindowTitle(self.windowTitle() + "*")
         self.tableWidget.blockSignals(False)
 
-    def addTopRow(self) -> None:
+    # TODO: Добавлять ряд в ui подставляя default значения или пустые колонки, переопределить закрытие
+    def addTopRowUI(self) -> None:
         self.tableWidget.blockSignals(True)
-        data = self.addRowBD()
+        self.selItems = self.tableWidget.selectedItems()
         self.tableWidget.insertRow(self.selItems[-1].row())
         for col in range(len(self.names)):
             self.tableWidget.setItem(
                 self.selItems[-1].row() - 1,
                 col,
-                QtWidgets.QTableWidgetItem(str(data[col])),
+                QtWidgets.QTableWidgetItem(''),
             )
-        self.saved = False
-        # if not self.windowTitle().endswith("*"):
-        #     self.setWindowTitle(self.windowTitle() + "*")
         self.tableWidget.blockSignals(False)
 
     def executeCustomQuery(self) -> None:
@@ -176,11 +168,11 @@ class DBeditor(QtWidgets.QMainWindow):
         contextMenu.addAction(self.delAct)
         action = contextMenu.exec_(self.mapToGlobal(event.pos()))
         if action == self.delAct:
-            self.delRowDB()
+            self.delRowDBnUI()
         elif action == self.addTopAct:
-            self.addTopRow()
+            self.addTopRowUI()
         elif action == self.addBottomAct:
-            self.addBottomRow()
+            self.addBottomRowUI()
         elif action == self.customQueryAct:
             self.customQueryWindow = customQueryWindow()
             self.customQueryWindow.show()
