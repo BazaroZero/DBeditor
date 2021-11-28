@@ -1,5 +1,5 @@
 from typing import List, Any
-from sqlalchemy import create_engine, MetaData, Table
+from sqlalchemy import create_engine, MetaData, Table, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker
 
@@ -27,3 +27,8 @@ class Database:
 
     def get_table(self, name: str) -> Table:
         return self._metadata.tables[name]
+
+    def execute_raw(self, query: str, **args: Any) -> Any:
+        statement = text(query)
+        with self.engine.connect() as connection:
+            return connection.execute(statement, **args)

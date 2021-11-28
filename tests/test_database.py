@@ -15,6 +15,8 @@ CREATE TABLE second (
     data INT,
     date DATE
 );
+
+INSERT INTO first(name) VALUES ('lorem'), ('ipsum');
 """
 
 
@@ -31,3 +33,8 @@ def test_get_tables(database: Database) -> None:
 
 def test_get_table_column_names(database: Database) -> None:
     assert database.get_table_column_names("first") == ["id", "name"]
+
+
+def test_raw_execute(database: Database) -> None:
+    result = database.execute_raw("select name from first where id = :id", id=2)
+    assert list(result) == [("ipsum",)]
