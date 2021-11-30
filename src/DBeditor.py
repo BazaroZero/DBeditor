@@ -1,6 +1,6 @@
 import os.path
 from sys import exit, argv
-from typing import Optional
+from typing import List, Optional
 
 from PyQt5 import QtCore, QtWidgets
 
@@ -25,20 +25,7 @@ class DBeditor(QtWidgets.QMainWindow):
             return
         self._database = Database(filename)
         tables = self._database.get_tables()
-
-        self.tableMenu = QtWidgets.QMenu("Table", self.menubar)
-        self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
-        for i, table in enumerate(tables):
-            action = QtWidgets.QAction(
-                table, self.menubar, checkable=True, checked=i == 0
-            )
-            self.tablesActionGroup.addAction(action)
-            self.tableMenu.addAction(action)
-        self.menubar.addAction(self.tableMenu.menuAction())
-        self.tablesActionGroup.triggered.connect(
-            lambda sender: self.initTable(sender.text())
-        )
-
+        self.initTablesMenu(tables)
         self.initTable(tables[0])
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
@@ -51,8 +38,24 @@ class DBeditor(QtWidgets.QMainWindow):
             "",
             "All SQLite databases (*.db *.sdb *.sqlite *.db3 *.s3db *.sqlite3 *.sl3)",
         )
+        if not filename:
+            return
         self._database = Database(filename)
-        self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}*")
+        self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
+
+    def initTablesMenu(self, tables: List[str]) -> None:
+        self.tableMenu = QtWidgets.QMenu("Table", self.menubar)
+        self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
+        for i, table in enumerate(tables):
+            action = QtWidgets.QAction(
+                table, self.menubar, checkable=True, checked=i == 0
+            )
+            self.tablesActionGroup.addAction(action)
+            self.tableMenu.addAction(action)
+        self.menubar.addAction(self.tableMenu.menuAction())
+        self.tablesActionGroup.triggered.connect(
+            lambda sender: self.initTable(sender.text())
+        )
 
     def saveItem(self, item: QtWidgets.QTableWidgetItem) -> None:
         self.selItemText = item.text()
@@ -81,8 +84,8 @@ class DBeditor(QtWidgets.QMainWindow):
                 QtWidgets.QTableWidgetItem(self.selItemText)
             )
 
-    def initTable(self, action: QtWidgets.QAction) -> None:
-        self.chosenTable = action
+    def initTable(self, table: str) -> None:
+        self.chosenTable = table
         self.chosenTableLabel.setText(self.chosenTable)
         self.tableWidget.blockSignals(True)
         data = self._database.select_all(self.chosenTable)
@@ -99,11 +102,10 @@ class DBeditor(QtWidgets.QMainWindow):
                     QtWidgets.QTableWidgetItem(str(data[row][col])),
                 )
         header = self.tableWidget.horizontalHeader()
-        for col in range(len(self.names)):
-            header.setSectionResizeMode(col, QtWidgets.QHeaderView.Stretch)
+        header.setSectionResizeMode(len(self.names) - 1, QtWidgets.QHeaderView.Stretch)
         self.tableWidget.blockSignals(False)
 
-    def delRowDBnUI(self) -> None:
+    def delRowDB(self) -> None:
         try:
             self.tableWidget.blockSignals(True)
             self.selItems = self.tableWidget.selectedItems()
@@ -114,17 +116,8 @@ class DBeditor(QtWidgets.QMainWindow):
         except SQLAlchemyError as error:
             self.displayError(str(error.__dict__['orig']))
 
-    # TODO: Insert row with default values
-    def addRowBD(self) -> None:
-        try:
-            self._database.insert_row(self.chosenTable, {})
-        except SQLAlchemyError as error:
-            self.tableWidget.setItem(
-                self.selItems.row(), self.selItems.column(), self.selItems
-            )
-            self.displayError(error)
-
-    def addBottomRowUI(self) -> None:
+    # TODO: finalize
+    def addBottomRowDB(self) -> None:
         self.tableWidget.blockSignals(True)
         self.selItems = self.tableWidget.selectedItems()
         self.tableWidget.insertRow(self.selItems[-1].row() + 1)
@@ -136,44 +129,55 @@ class DBeditor(QtWidgets.QMainWindow):
             )
         self.tableWidget.blockSignals(False)
 
-    # TODO: Добавлять ряд в ui подставляя default значения или пустые колонки, переопределить закрытие
-    def addTopRowUI(self) -> None:
-        self.tableWidget.blockSignals(True)
-        self.selItems = self.tableWidget.selectedItems()
-        self.tableWidget.insertRow(self.selItems[-1].row())
-        for col in range(len(self.names)):
-            self.tableWidget.setItem(
-                self.selItems[-1].row() - 1,
-                col,
-                QtWidgets.QTableWidgetItem(''),
-            )
-        self.tableWidget.blockSignals(False)
+    # TODO: finalize
+    def addTopRowDB(self) -> None:
+        try:
+            self.tableWidget.blockSignals(True)
+            self._database.insert_row(self.chosenTable, {})
+            query = f"select * from sqlite_master where type='table' and name='{self.chosenTable}'"
+            defaultValues = self._database.execute_raw(query)
+            self.selItems = self.tableWidget.selectedItems()
+            self.tableWidget.insertRow(self.selItems[-1].row())
+            for col in range(len(self.names)):
+                self.tableWidget.setItem(
+                    self.selItems[-1].row() - 1,
+                    col,
+                    QtWidgets.QTableWidgetItem(),
+                )
+            self.tableWidget.blockSignals(False)
+        except SQLAlchemyError as error:
+            self.displayError(str(error.__dict__['orig']))
 
     def executeCustomQuery(self) -> None:
-        # ВЫПОЛНЕНИЕ КАСТОМНОГО ЗАПРОСА
-        self.customQueryWindow.close()
-        self.customQueryWindow = None
+        query = self.customQueryWindow.query.toPlainText()
+        try:
+            columns, data = self._database.execute_raw(query)
+            if data:
+                print(columns)
+                print(data)
+                self.customQueryWindow.tableWidget.setColumnCount(len(columns))
+                self.customQueryWindow.tableWidget.setHorizontalHeaderLabels(columns)
+                self.customQueryWindow.tableWidget.setRowCount(len(data))
+                for row in range(len(data)):
+                    for col in range(len(columns)):
+                        self.customQueryWindow.tableWidget.setItem(
+                            row,
+                            col,
+                            QtWidgets.QTableWidgetItem(str(data[row][col])),
+                        )
+                header = self.customQueryWindow.tableWidget.horizontalHeader()
+                header.setSectionResizeMode(len(columns) - 1, QtWidgets.QHeaderView.Stretch)
+            tables = self._database.get_tables()
+            self.menubar.removeAction(self.tableMenu.menuAction())
+            self.initTablesMenu(tables)
+            self.initTable(self.chosenTable)
+        except SQLAlchemyError as error:
+            self.displayError(str(error.__dict__['orig']))
 
     def contextMenuEvent(self, event) -> None:
-        contextMenu = QtWidgets.QMenu(self)
-        self.customQueryAct = QtWidgets.QAction("Custom query", self)
-        self.customQueryAct.setShortcut("Ctrl+Q")
-        contextMenu.addAction(self.customQueryAct)
-        self.addTopAct = QtWidgets.QAction("Add line on top", self)
-        contextMenu.addAction(self.addTopAct)
-        self.addBottomAct = QtWidgets.QAction("Add line below", self)
-        contextMenu.addAction(self.addBottomAct)
-        self.delAct = QtWidgets.QAction("Delete", self)
-        self.delAct.setShortcut("Del")
-        contextMenu.addAction(self.delAct)
-        action = contextMenu.exec_(self.mapToGlobal(event.pos()))
-        if action == self.delAct:
-            self.delRowDBnUI()
-        elif action == self.addTopAct:
-            self.addTopRowUI()
-        elif action == self.addBottomAct:
-            self.addBottomRowUI()
-        elif action == self.customQueryAct:
+        self.contextMenu.exec_(self.mapToGlobal(event.pos()))
+
+    def initCustomQueryWindow(self) -> None:
             self.customQueryWindow = customQueryWindow()
             self.customQueryWindow.show()
             self.customQueryWindow.execute.clicked.connect(
@@ -192,7 +196,7 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def setupUi(self) -> None:
         self.setWindowTitle("DBeditor")
-        self.resize(569, 425)
+        self.resize(900, 500)
         self.centralwidget = QtWidgets.QWidget(self)
         self.gridLayout = QtWidgets.QGridLayout(self.centralwidget)
         self.search = QtWidgets.QLineEdit(self.centralwidget)
@@ -214,34 +218,67 @@ class DBeditor(QtWidgets.QMainWindow):
         self.setMenuBar(self.menubar)
         self.openDB = QtWidgets.QAction("Open DB", self)
         self.createDB = QtWidgets.QAction("Create DB", self)
+        self.customQueryAct = QtWidgets.QAction("Custom query", self)
+        self.customQueryAct.setShortcut("Ctrl+Q")
+        self.addTopAct = QtWidgets.QAction("Add line on top", self)
+        self.addBottomAct = QtWidgets.QAction("Add line below", self)
+        self.delAct = QtWidgets.QAction("Delete", self)
+        self.delAct.setShortcut("Del")
+
+        self.contextMenu = QtWidgets.QMenu(self.centralwidget)
+        self.contextMenu.addAction(self.customQueryAct)
+        self.centralwidget.addAction(self.customQueryAct)
+        self.contextMenu.addAction(self.addTopAct)
+        self.contextMenu.addAction(self.addBottomAct)
+        self.contextMenu.addAction(self.delAct)
+        self.centralwidget.addAction(self.delAct)
 
         self.fileMenu.addAction(self.openDB)
         self.fileMenu.addAction(self.createDB)
         self.menubar.addAction(self.fileMenu.menuAction())
 
+        self.customQueryAct.triggered.connect(self.initCustomQueryWindow)
+        self.delAct.triggered.connect(self.delRowDB)
+        self.addTopAct.triggered.connect(self.addTopRowDB)
+        self.addBottomAct.triggered.connect(self.addBottomRowDB)
         self.openDB.triggered.connect(self.on_database_open)
         self.createDB.triggered.connect(self.on_database_create)
         self.startSearch.clicked.connect(self.searchAcrossTable)
 
         self.saved = True
-        self.customQueryWindow = None
 
 
 class customQueryWindow(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
-
+    
     def setupUi(self) -> None:
         self.setWindowTitle("Custom query window")
-        self.resize(398, 282)
-        self.gridLayout = QtWidgets.QGridLayout(self)
-        self.label = QtWidgets.QLabel("Type your query:", self)
-        self.gridLayout.addWidget(self.label, 0, 0, 1, 1)
-        self.query = QtWidgets.QPlainTextEdit(self)
-        self.gridLayout.addWidget(self.query, 1, 0, 1, 2)
-        self.execute = QtWidgets.QPushButton("Search", self)
-        self.gridLayout.addWidget(self.execute, 2, 1, 1, 1)
+        self.resize(640, 300)
+        self.horizontalLayout = QtWidgets.QHBoxLayout(self)
+        self.inputFrame = QtWidgets.QFrame(self)
+        self.inputFrame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.inputFrame.setFrameShadow(QtWidgets.QFrame.Raised)
+        self.gridLayout1 = QtWidgets.QGridLayout(self.inputFrame)
+        self.label1 = QtWidgets.QLabel("Type your query:", self.inputFrame)
+        self.gridLayout1.addWidget(self.label1, 0, 0, 1, 1)
+        self.query = QtWidgets.QPlainTextEdit(self.inputFrame)
+        self.gridLayout1.addWidget(self.query, 1, 0, 1, 2)
+        self.execute = QtWidgets.QPushButton("Execute", self.inputFrame)
+        self.gridLayout1.addWidget(self.execute, 2, 1, 1, 1)
+        self.horizontalLayout.addWidget(self.inputFrame)
+        self.outputFrame = QtWidgets.QFrame(self)
+        self.outputFrame.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        self.outputFrame.setFrameShadow(QtWidgets.QFrame.Raised)
+        self.gridLayout2 = QtWidgets.QGridLayout(self.outputFrame)
+        self.label2 = QtWidgets.QLabel("Output:", self.outputFrame)
+        self.gridLayout2.addWidget(self.label2, 0, 0, 1, 1)
+        self.tableWidget = QtWidgets.QTableWidget(self.outputFrame)
+        self.tableWidget.setColumnCount(0)
+        self.tableWidget.setRowCount(0)
+        self.gridLayout2.addWidget(self.tableWidget, 1, 0, 1, 1)
+        self.horizontalLayout.addWidget(self.outputFrame)
 
 
 if __name__ == "__main__":
