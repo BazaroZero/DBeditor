@@ -1,4 +1,4 @@
-from typing import List, Any, Dict
+from typing import List, Any, Dict, Tuple
 from sqlalchemy import create_engine, MetaData, Table, text
 from sqlalchemy.inspection import inspect
 from sqlalchemy.engine import Engine
@@ -62,7 +62,7 @@ class Database:
             session.query(table).filter_by(**pks).update(new_values)
             session.commit()
 
-    def execute_raw(self, query: str, **args: Any):
+    def execute_raw(self, query: str, **args: Any) -> Tuple[Any]:
         statement = text(query).execution_options(autocommit=True)
         with self.engine.connect() as connection:
             data = connection.execute(statement, **args)
