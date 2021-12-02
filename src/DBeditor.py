@@ -7,6 +7,8 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from database import Database
 from sqlalchemy.exc import SQLAlchemyError
 
+from uri_builder import build_uri, DatabaseKind
+
 
 class DBeditor(QtWidgets.QMainWindow):
     def __init__(self) -> None:
@@ -23,7 +25,7 @@ class DBeditor(QtWidgets.QMainWindow):
         )
         if not filename:
             return
-        self._database = Database(filename)
+        self._database = Database(build_uri(DatabaseKind.SQLITE, filename))
         tables = self._database.get_tables()
         self.initTablesMenu(tables)
         self.initTable(tables[0])
@@ -41,7 +43,7 @@ class DBeditor(QtWidgets.QMainWindow):
         )
         if not filename:
             return
-        self._database = Database(filename)
+        self._database = Database(build_uri(DatabaseKind.SQLITE, filename))
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
 
     def initTablesMenu(self, tables: List[str]) -> None:
