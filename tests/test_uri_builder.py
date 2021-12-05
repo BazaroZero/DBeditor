@@ -1,6 +1,8 @@
+from typing import Optional
+
 import pytest
 
-from src.uri_builder import _get_protocol, DatabaseKind, build_uri
+from src.uri_builder import _get_protocol, DatabaseKind, build_uri, Netloc
 
 
 @pytest.mark.parametrize(
@@ -23,22 +25,35 @@ def test_get_protocol_sqlite_with_driver() -> None:
 @pytest.mark.parametrize(
     "kind, path, netloc, expected",
     [
-        (DatabaseKind.SQLITE, r"C:\db.sqlite", "", r"sqlite:///C:\db.sqlite"),
-        (DatabaseKind.SQLITE, "/tmp/db.sqlite", "", "sqlite:////tmp/db.sqlite"),
+        (DatabaseKind.SQLITE, "", None, "sqlite:///"),
+        (DatabaseKind.SQLITE, r"C:\db.sqlite", None, r"sqlite:///C:\db.sqlite"),
+        (
+            DatabaseKind.SQLITE,
+            "/tmp/db.sqlite",
+            None,
+            "sqlite:////tmp/db.sqlite",
+        ),
         (
             DatabaseKind.POSTGRESQL,
             "dir",
-            "john:doe@localhost",
+            Netloc(username="john", password="doe", host="localhost"),
             "postgresql+psycopg2://john:doe@localhost/dir",
+        ),
+        (
+            DatabaseKind.POSTGRESQL,
+            "dir",
+            Netloc(username="john", password="doe", host="localhost", port=999),
+            "postgresql+psycopg2://john:doe@localhost:999/dir",
         ),
     ],
 )
 def test_build_url(
-    kind: DatabaseKind, path: str, netloc: str, expected: str
+    kind: DatabaseKind, path: str, netloc: Optional[Netloc], expected: str
 ) -> None:
     assert build_uri(kind, path, netloc) == expected
 
 
 def test_build_uri_sqlite_with_netloc() -> None:
+    netloc = Netloc("a", "b", "c")
     with pytest.raises(ValueError):
-        build_uri(DatabaseKind.SQLITE, "db.sqlite", "localhost")
+        build_uri(DatabaseKind.SQLITE, "db.sqlite", netloc)

@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 import pytest
 
 from src.database import Database
+from src.uri_builder import build_uri, DatabaseKind
 
 _SCRIPT = """
 CREATE TABLE first (
@@ -25,7 +26,8 @@ INSERT INTO first(name) VALUES ('lorem'), ('ipsum');
 def database() -> Database:
     conn = connect(":memory:")
     conn.executescript(_SCRIPT)
-    return Database("", creator=lambda: conn)
+    uri = build_uri(DatabaseKind.SQLITE, "")
+    return Database(uri, creator=lambda: conn)
 
 
 def test_get_tables(database: Database) -> None:

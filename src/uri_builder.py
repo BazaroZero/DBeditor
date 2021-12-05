@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -27,14 +28,31 @@ def _get_protocol(db_kind: DatabaseKind, driver: Optional[str] = None) -> str:
     return db_kind.value
 
 
+@dataclass
+class Netloc:
+    username: str
+    password: str
+    host: str = "localhost"
+    port: Optional[int] = None
+
+    def __str__(self) -> str:
+        uri = f"{self.username}:{self.password}@{self.host}"
+        if self.port is not None:
+            uri += f":{self.port}"
+        return uri
+
+
 def build_uri(
     db_kind: DatabaseKind,
     path: str,
-    netloc: str = "",
+    netloc: Optional[Netloc] = None,
     driver: Optional[str] = None,
 ) -> str:
     if db_kind == DatabaseKind.SQLITE and netloc:
         raise ValueError("SQLite does not supporting remote databases.")
 
+    # TODO: use polymorphism
     proto = _get_protocol(db_kind, driver)
+    if netloc is None:
+        return f"{proto}:///{path}"
     return f"{proto}://{netloc}/{path}"

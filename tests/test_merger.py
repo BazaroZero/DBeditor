@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from src.database import Database
 from src.loaders.csv_loader import CSVLoader
 from src.merger import Merger
+from src.uri_builder import DatabaseKind, build_uri
 
 _SCRIPT = """
 CREATE TABLE example(
@@ -21,7 +22,8 @@ CREATE TABLE example(
 def db() -> Database:
     conn = connect(":memory:")
     conn.executescript(_SCRIPT)
-    return Database("", creator=lambda: conn)
+    uri = build_uri(DatabaseKind.SQLITE, "")
+    return Database(uri, creator=lambda: conn)
 
 
 @pytest.fixture
