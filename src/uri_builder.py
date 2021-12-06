@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 
 
 class DatabaseKind(Enum):
@@ -33,11 +33,11 @@ class Netloc:
     username: str
     password: str
     host: str = "localhost"
-    port: Optional[int] = None
+    port: Optional[Union[str, int]] = None
 
     def __str__(self) -> str:
         uri = f"{self.username}:{self.password}@{self.host}"
-        if self.port is not None:
+        if self.port:
             uri += f":{self.port}"
         return uri
 

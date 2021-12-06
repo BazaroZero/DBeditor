@@ -7,14 +7,15 @@ class TableBuilder:
     def __init__(self) -> None:
         self._columns: Dict[str, Column] = {}
 
-    def add_column(self, name: str, *args: Any, **kwargs: Any) -> None:
-        if name in self._columns:
-            raise ValueError("Column with this name already exists.")
-        self._columns[name] = Column(name, *args, **kwargs)
+    def add_column(self, table: str, name: str, *args: Any, **kwargs: Any) -> None:
+        if table not in self._columns:
+            self._columns[table] = [Column(name, *args, **kwargs)]
+        else:
+            self._columns[table].append(Column(name, *args, **kwargs))
 
-    def as_table(
-        self, table_name: str, meta: Optional[MetaData] = None
-    ) -> Table:
+    def add_table(self, meta: Optional[MetaData] = None):
         if meta is None:
             meta = MetaData()
-        return Table(table_name, meta, *self._columns.values())
+        for table in self._columns:
+            print(self._columns[table])
+            Table(table, meta, *self._columns[table])
