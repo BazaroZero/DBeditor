@@ -3,6 +3,7 @@ from sys import exit, argv
 from typing import List, Optional
 
 from PyQt5 import QtCore, QtWidgets, QtGui
+from sqlalchemy.orm import session
 
 from database import Database
 from sqlalchemy.exc import SQLAlchemyError
@@ -54,6 +55,7 @@ class DBeditor(QtWidgets.QMainWindow):
         self._builder = TableBuilder()
         self.addedRows, self.addedTables = {}, []
         self.initTablesMenu([])
+        self.chosenTableLabel.setText("")
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editBDfunc)
@@ -71,7 +73,10 @@ class DBeditor(QtWidgets.QMainWindow):
         self.addedRows, self.addedTables = {}, []
         self.tables = self._database.get_tables()
         self.initTablesMenu(self.tables)
-        self.initTable(self.tables[0])
+        if self.tables:
+            self.initTable(self.tables[0])
+        else:
+            self.chosenTable = ""
         self.setWindowTitle(f"DBeditor - {self.remoteConnectionWindow.DBlocation.text()}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editBDfunc)
@@ -82,17 +87,29 @@ class DBeditor(QtWidgets.QMainWindow):
         self.remoteConnectionWindow.show()
 
     def importCSV(self) -> None:
-        filename, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self.centralwidget,
-            "Select сsv",
-            "",
-            "*.csv",
-        )
-        if not filename:
-            return
-        Merger(CSVLoader(filename))
+        if self.chosenTable not in self.addedTables:
+            filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+                self.centralwidget,
+                "Select сsv",
+                "",
+                "*.csv",
+            )
+            if not filename:
+                return
+            try:
+                with open(filename) as file:
+                    loader = CSVLoader(file)
+                    merger = Merger(self._database._session, self._database.get_table(self.chosenTable))
+                    merger.merge(loader)
+                self.initTable(self.chosenTable)
+            except SQLAlchemyError as error:
+                self.displayError(error.__dict__["orig"])
+        else:
+            self.displayError("Save the table before importing the data")
 
     def initTablesMenu(self, tables: List[str]) -> None:
+        if self.tablesMenuCreated:
+            self.menubar.removeAction(self.tableMenu.menuAction())
         self.tableMenu = QtWidgets.QMenu("Table", self.menubar)
         self.tablesActionGroup = QtWidgets.QActionGroup(self.menubar)
         for i, table in enumerate(tables):
@@ -101,9 +118,8 @@ class DBeditor(QtWidgets.QMainWindow):
             )
             self.tablesActionGroup.addAction(action)
             self.tableMenu.addAction(action)
-        if not self.tablesMenuCreated:
-            self.menubar.addAction(self.tableMenu.menuAction())
-            self.tablesMenuCreated = True
+        self.menubar.addAction(self.tableMenu.menuAction())
+        self.tablesMenuCreated = True
         self.tablesActionGroup.triggered.connect(
             lambda sender: self.initTable(sender.text(), True)
         )
@@ -134,17 +150,19 @@ class DBeditor(QtWidgets.QMainWindow):
     def editBDfunc(self, item: QtWidgets.QTableWidgetItem) -> None:
         try:
             if self.chosenTable not in self.addedTables:
-                self._database.update_row(
-                    self.chosenTable,
-                    self.addrToDBRow,
-                    {self.names[item.column()]: self.translateString(item.text())},
-                )
+                if item.row() not in self.addedRows[self.chosenTable]:
+                    self._database.update_row(
+                        self.chosenTable,
+                        self.addrToDBRow,
+                        {self.names[item.column()]: self.translateString(item.text())},
+                    )
+                else:
+                    self.addedRows[self.chosenTable][item.row()][item.column()] = item.text()
             else:
                 if self.chosenTable not in self.addedRows:
                     self.addedRows[self.chosenTable] = {item.row(): {item.column():item.text()}}
                 else:
                     self.addedRows[self.chosenTable][item.row()][item.column()] = item.text()
-                print(self.addedRows)
 
         except SQLAlchemyError as error:
             self.displayError(error.__dict__["orig"])
@@ -205,22 +223,23 @@ class DBeditor(QtWidgets.QMainWindow):
         meta.create_all(self._database._engine)
         
     def dropTableDB(self) -> None:
-        if self.chosenTable not in self.addedTables:
-            self._database.get_table(self.chosenTable).drop(self._database._engine)
-        else:
-            del self.addedRows[self.chosenTable]
-            del self._builder._columns[self.chosenTable]
-            self.addedTables.remove(self.chosenTable)
-        action = self.tablesActionGroup.checkedAction()
-        self.tableMenu.removeAction(action)
-        self.tablesActionGroup.removeAction(action)
-        self.tableWidget.setColumnCount(0)
-        self.tableWidget.setRowCount(0)
-        self.chosenTableLabel.setText("")
+        if self._database:
+            if self.chosenTableLabel.text() and self.chosenTable not in self.addedTables:
+                self._database.get_table(self.chosenTable).drop(self._database._engine)
+            else:
+                del self.addedRows[self.chosenTable]
+                del self._builder._columns[self.chosenTable]
+                self.addedTables.remove(self.chosenTable)
+            action = self.tablesActionGroup.checkedAction()
+            self.tableMenu.removeAction(action)
+            self.tablesActionGroup.removeAction(action)
+            self.tableWidget.setColumnCount(0)
+            self.tableWidget.setRowCount(0)
+            self.chosenTableLabel.setText("")
 
     def initAddColumnWindow(self) -> None:
         if self._database:
-            if self.chosenTable in self.addedTables:
+            if self.chosenTableLabel.text() and self.chosenTable in self.addedTables:
                 self.addColumnWindow = addColumnWindow()
                 self.addColumnWindow.add.clicked.connect(self.addColumnUI)
                 self.addColumnWindow.show()
@@ -303,49 +322,66 @@ class DBeditor(QtWidgets.QMainWindow):
     def delRowDB(self) -> None:
         try:
             self.tableWidget.blockSignals(True)
-            self.selItems = self.tableWidget.selectedItems()
-            for selItem in self.selItems:
-                if self.chosenTable not in self.addedTables:
+            selItems = self.tableWidget.selectedItems()
+            for selItem in selItems:
+                if self.chosenTable not in self.addedTables and selItems[-1].row() not in self.addedRows[self.chosenTable]:
                     self._database.delete_row(
                         self.chosenTable, self.findRowFromUI(selItem.row())
                     )
                 else:
                     del self.addedRows[self.chosenTable][selItem.row()]
                 self.tableWidget.removeRow(selItem.row())
-            self.tableWidget.blockSignals(False)
+                if not self.addedRows[self.chosenTable] and self.chosenTable not in self.addedTables:
+                    action1 = self.tablesActionGroup.checkedAction()
+                    self.tablesActionGroup.removeAction(action1)
+                    self.tableMenu.removeAction(action1)
+                    action2 = QtWidgets.QAction(self.chosenTable, self.menubar, checkable=True, checked=True)
+                    self.tablesActionGroup.addAction(action2)
+                    self.tableMenu.addAction(action2)
+                    self.tableWidget.blockSignals(False)
         except SQLAlchemyError as error:
             self.displayError(error.__dict__["orig"])
 
     def addBottomRowDB(self) -> None:
         self.tableWidget.blockSignals(True)
-        self.selItems = self.tableWidget.selectedItems()
-        self.tableWidget.insertRow(self.selItems[-1].row() + 1)
-        if self.chosenTable not in self.addedRows:
-            self.addedRows[self.chosenTable] = {self.selItems[-1].row() + 1:[""] * len(self.names)}
+        selItems = self.tableWidget.selectedItems()
+        if self.chosenTable not in self.addedRows and self.chosenTable not in self.addedTables:
+            action1 = self.tablesActionGroup.checkedAction()
+            self.tablesActionGroup.removeAction(action1)
+            self.tableMenu.removeAction(action1)
+            action2 = QtWidgets.QAction(self.chosenTable + "*", self.menubar, checkable=True, checked=True)
+            self.tablesActionGroup.addAction(action2)
+            self.tableMenu.addAction(action2)
+        if self.tableWidget.rowCount():
+            self.tableWidget.insertRow(selItems[-1].row() + 1)
+            if self.chosenTable not in self.addedRows:
+                self.addedRows[self.chosenTable] = {selItems[-1].row() + 1:{}}
+            else:
+                self.addedRows[self.chosenTable][selItems[-1].row() + 1] = {}
         else:
-            self.addedRows[self.chosenTable][self.selItems[-1].row() + 1] = [""] * len(self.names)
-        for col in range(len(self.names)):
-            self.tableWidget.setItem(
-                self.selItems[-1].row() + 1,
-                col,
-                QtWidgets.QTableWidgetItem(),
-            )
+            self.tableWidget.insertRow(0)
+            self.addedRows[self.chosenTable] = {0:{}}
         self.tableWidget.blockSignals(False)
 
     def addTopRowDB(self) -> None:
         self.tableWidget.blockSignals(True)
-        self.selItems = self.tableWidget.selectedItems()
-        self.tableWidget.insertRow(self.selItems[-1].row())
-        if self.chosenTable not in self.addedRows:
-            self.addedRows[self.chosenTable] = {self.selItems[-1].row():[""] * len(self.names)}
+        selItems = self.tableWidget.selectedItems()
+        if self.chosenTable not in self.addedRows and self.chosenTable not in self.addedTables:
+            action1 = self.tablesActionGroup.checkedAction()
+            self.tablesActionGroup.removeAction(action1)
+            self.tableMenu.removeAction(action1)
+            action2 = QtWidgets.QAction(self.chosenTable + "*", self.menubar, checkable=True, checked=True)
+            self.tablesActionGroup.addAction(action2)
+            self.tableMenu.addAction(action2)
+        if self.tableWidget.rowCount():
+            self.tableWidget.insertRow(selItems[-1].row())
+            if self.chosenTable not in self.addedRows:
+                self.addedRows[self.chosenTable] = {selItems[-1].row() - 1:{}}
+            else:
+                self.addedRows[self.chosenTable][selItems[-1].row() - 1] = {}
         else:
-            self.addedRows[self.chosenTable][self.selItems[-1].row()] = [""] * len(self.names)
-        for col in range(len(self.names)):
-            self.tableWidget.setItem(
-                self.selItems[-1].row() - 1,
-                col,
-                QtWidgets.QTableWidgetItem(),
-            )
+            self.tableWidget.insertRow(0)
+            self.addedRows[self.chosenTable] = {0:{}}
         self.tableWidget.blockSignals(False)
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
@@ -365,25 +401,28 @@ class DBeditor(QtWidgets.QMainWindow):
         else:
             event.accept()
 
-    # TODO: Refresh menubar
     def saveTableDB(self) -> None:
-        if self._database and self.chosenTable in self._builder._columns:
+        if self._database:
             try:
-                print(self.chosenTable)
                 if self._builder._columns:
                     self.addTablesDB()
+                    del self._builder._columns[self.chosenTable]
                 if self.addedRows:
                     self.insertRowsDB()
+                    del self.addedRows[self.chosenTable]
+                if self.chosenTable in self.addedTables:
+                    self.addedTables.remove(self.chosenTable)
                 if self.tables:
                     self.tables.append(self.chosenTable)
                 else:
                     self.tables = [self.chosenTable]
-                del self._builder._columns[self.chosenTable]
-                del self.addedRows[self.chosenTable]
-                self.addedTables.remove(self.chosenTable)
                 self.initTable(self.chosenTable)
-                # self.menubar.removeAction(self.tableMenu.menuAction())
-                # self.initTablesMenu(self.tables)
+                action1 = self.tablesActionGroup.checkedAction()
+                self.tablesActionGroup.removeAction(action1)
+                self.tableMenu.removeAction(action1)
+                action2 = QtWidgets.QAction(self.chosenTable, self.menubar, checkable=True, checked=True)
+                self.tablesActionGroup.addAction(action2)
+                self.tableMenu.addAction(action2)
             except SQLAlchemyError as error:
                 self.displayError(error.__dict__["orig"])
 
@@ -489,7 +528,6 @@ class DBeditor(QtWidgets.QMainWindow):
         self.dropTableAct.triggered.connect(self.dropTableDB)
         self.startSearch.clicked.connect(self.searchAcrossTable)
 
-        self.saved = True
         self.tablesMenuCreated = False
 
 
