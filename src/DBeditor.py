@@ -3,7 +3,6 @@ from sys import exit, argv
 from typing import List, Optional
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from sqlalchemy.orm import session
 
 from database import Database
 from sqlalchemy.exc import SQLAlchemyError
@@ -186,14 +185,17 @@ class DBeditor(QtWidgets.QMainWindow):
             table, okPressed = QtWidgets.QInputDialog.getText(self, "New table", 
                                                     "Enter the title of the table")
             if okPressed and table:
-                self.addedTables.append(table)
-                if self.tableMenu.isEmpty():
-                    action = QtWidgets.QAction(table + "*", self.menubar, checkable=True, checked=True)
-                    self.initTable(table)
+                if table in self.tables + self.addedTables:
+                    self.displayError("Table with this name already exists")
                 else:
-                    action = QtWidgets.QAction(table + "*", self.menubar, checkable=True)
-                self.tablesActionGroup.addAction(action)
-                self.tableMenu.addAction(action)
+                    self.addedTables.append(table)
+                    if self.tableMenu.isEmpty():
+                        action = QtWidgets.QAction(table + "*", self.menubar, checkable=True, checked=True)
+                        self.initTable(table)
+                    else:
+                        action = QtWidgets.QAction(table + "*", self.menubar, checkable=True)
+                    self.tablesActionGroup.addAction(action)
+                    self.tableMenu.addAction(action)
             self.tableWidget.blockSignals(False)
 
     def translateString(self, string: str):
@@ -203,19 +205,24 @@ class DBeditor(QtWidgets.QMainWindow):
         return string
 
     def addColumnUI(self) -> None:
-        translateConstraints = {"Primary key": "primary_key", "Not null": "nullable", 
-                    "Unique": "unique", "Autoincrement": "auto_increment"}
-        translateTypes = {"BigInteger": types.BigInteger, "Boolean": types.Boolean, "Date": types.Date, 
-                        "DateTime": types.DateTime, "Integer": types.Integer, 
-                        "Float": types.Float, "Numeric": types.Numeric, "Text": types.Text, "String": types.String}
-        constraints = {}
-        for btn in self.addColumnWindow.btnGroup.buttons():
-            if btn.isChecked():
-                constraints[translateConstraints[btn.text()]] = True
-        if self.addColumnWindow.default.isChecked():
-            constraints["default"] = self.translateString(self.addColumnWindow.defVallue.text())
-        self._builder.add_column(self.chosenTable, self.addColumnWindow.title.text(), translateTypes[self.addColumnWindow.type.currentText()], **constraints)
-        self.initTable(self.chosenTable)
+        if not self.addColumnWindow.title:
+            self.displayError("Enter title of the column")
+        elif self.chosenTable in self._builder._columns and self.addColumnWindow.title in [col.name for col in self._builder._columns[self.chosenTable]]:
+            self.displayError("Column with this name already exists")
+        else:
+            translateConstraints = {"Primary key": "primary_key", "Not null": "nullable", 
+                        "Unique": "unique", "Autoincrement": "autoincrement"}
+            translateTypes = {"BigInteger": types.BigInteger, "Boolean": types.Boolean, "Date": types.Date, 
+                            "DateTime": types.DateTime, "Integer": types.Integer, 
+                            "Float": types.Float, "Numeric": types.Numeric, "Text": types.Text, "String": types.String}
+            constraints = {}
+            for btn in self.addColumnWindow.btnGroup.buttons():
+                if btn.isChecked():
+                    constraints[translateConstraints[btn.text()]] = True
+            if self.addColumnWindow.default.isChecked():
+                constraints["default"] = self.translateString(self.addColumnWindow.defVallue.text())
+            self._builder.add_column(self.chosenTable, self.addColumnWindow.title.text(), translateTypes[self.addColumnWindow.type.currentText()], **constraints)
+            self.initTable(self.chosenTable)
 
     def addTablesDB(self) -> None:
         meta = self._database._metadata
@@ -227,8 +234,10 @@ class DBeditor(QtWidgets.QMainWindow):
             if self.chosenTableLabel.text() and self.chosenTable not in self.addedTables:
                 self._database.get_table(self.chosenTable).drop(self._database._engine)
             else:
-                del self.addedRows[self.chosenTable]
-                del self._builder._columns[self.chosenTable]
+                if self.chosenTable in self.addedRows:
+                    del self.addedRows[self.chosenTable]
+                if self.chosenTable in self._builder._columns:
+                    del self._builder._columns[self.chosenTable]
                 self.addedTables.remove(self.chosenTable)
             action = self.tablesActionGroup.checkedAction()
             self.tableMenu.removeAction(action)
@@ -459,6 +468,8 @@ class DBeditor(QtWidgets.QMainWindow):
             if self.chosenTable not in self.addedTables:
                 self.customQueryAct = QtWidgets.QAction("Custom query", self.centralwidget)
                 self.contextMenu.addAction(self.customQueryAct)
+            else:
+                self.customQueryAct = -1
             self.contextMenu.addActions((self.addTopAct, self.addBottomAct, self.delAct))
             action = self.contextMenu.exec_(self.mapToGlobal(event.pos()))
             if action == self.delAct: self.delRowDB()
