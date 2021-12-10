@@ -7,7 +7,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from database import Database
 from sqlalchemy.exc import SQLAlchemyError
 
-from sqlalchemy import types
+from sqlalchemy import types, MetaData
 from uri_builder import build_uri, DatabaseKind, Netloc
 from table_builder import TableBuilder
 from loaders.csv_loader import CSVLoader
@@ -102,7 +102,7 @@ class DBeditor(QtWidgets.QMainWindow):
                     merger.merge(loader)
                 self.initTable(self.chosenTable)
             except SQLAlchemyError as error:
-                self.displayError(error.__dict__["orig"])
+                self.displayError(str(error))
         else:
             self.displayError("Save the table before importing the data")
 
@@ -144,7 +144,9 @@ class DBeditor(QtWidgets.QMainWindow):
             self.names.index(title) for title in self.primeKeyColumns
         ]:
             pkItemValues.append(self.tableWidget.item(row, uiColIndex).text())
-        return dict(zip(self.primeKeyColumns, pkItemValues))
+        if out:= dict(zip(self.primeKeyColumns, pkItemValues)):
+            return out
+        return False
 
     def editBDfunc(self, item: QtWidgets.QTableWidgetItem) -> None:
         try:
@@ -164,7 +166,7 @@ class DBeditor(QtWidgets.QMainWindow):
                     self.addedRows[self.chosenTable][item.row()][item.column()] = item.text()
 
         except SQLAlchemyError as error:
-            self.displayError(error.__dict__["orig"])
+            self.displayError(str(error))
             self.tableWidget.setItem(
                 item.row(),
                 item.column(),
@@ -205,10 +207,10 @@ class DBeditor(QtWidgets.QMainWindow):
         return string
 
     def addColumnUI(self) -> None:
-        if not self.addColumnWindow.title:
-            self.displayError("Enter title of the column")
-        elif self.chosenTable in self._builder._columns and self.addColumnWindow.title in [col.name for col in self._builder._columns[self.chosenTable]]:
-            self.displayError("Column with this name already exists")
+        if not self.addColumnWindow.title.text():
+            self.addColumnWindow.displayError("Enter title of the column")
+        elif self.chosenTable in self._builder._columns and self.addColumnWindow.title.text() in [col.name for col in self._builder._columns[self.chosenTable]]:
+            self.addColumnWindow.displayError("Column with this name already exists")
         else:
             translateConstraints = {"Primary key": "primary_key", "Not null": "nullable", 
                         "Unique": "unique", "Autoincrement": "autoincrement"}
@@ -233,11 +235,15 @@ class DBeditor(QtWidgets.QMainWindow):
         if self._database:
             if self.chosenTableLabel.text() and self.chosenTable not in self.addedTables:
                 self._database.get_table(self.chosenTable).drop(self._database._engine)
-            else:
-                if self.chosenTable in self.addedRows:
-                    del self.addedRows[self.chosenTable]
-                if self.chosenTable in self._builder._columns:
-                    del self._builder._columns[self.chosenTable]
+                self._database._metadata = MetaData()
+                self._database._metadata.reflect(bind=self._database._engine)
+            if self.chosenTable in self.addedRows:
+                del self.addedRows[self.chosenTable]
+            if self.chosenTable in self._builder._columns:
+                del self._builder._columns[self.chosenTable]
+            if self.chosenTable in self.tables:
+                self.tables.remove(self.chosenTable)
+            if self.chosenTable in self.addedTables:
                 self.addedTables.remove(self.chosenTable)
             action = self.tablesActionGroup.checkedAction()
             self.tableMenu.removeAction(action)
@@ -331,16 +337,23 @@ class DBeditor(QtWidgets.QMainWindow):
     def delRowDB(self) -> None:
         try:
             self.tableWidget.blockSignals(True)
-            selItems = self.tableWidget.selectedItems()
+            selItems = self.tableWidget.selectedRanges()
+            ok = True
             for selItem in selItems:
-                if self.chosenTable not in self.addedTables and selItems[-1].row() not in self.addedRows[self.chosenTable]:
-                    self._database.delete_row(
-                        self.chosenTable, self.findRowFromUI(selItem.row())
-                    )
+                if self.chosenTable not in self.addedRows or (self.chosenTable in self.addedRows and selItems[-1].bottomRow() not in self.addedRows[self.chosenTable]):
+                    pks = self.findRowFromUI(selItem.bottomRow())
+                    if pks:
+                        self._database.delete_row(
+                            self.chosenTable, pks
+                        )
+                    else:
+                        ok = False
+                        self.displayError("It's unable to automatically locate row. Table doesn't have any primary key")
                 else:
-                    del self.addedRows[self.chosenTable][selItem.row()]
-                self.tableWidget.removeRow(selItem.row())
-                if not self.addedRows[self.chosenTable] and self.chosenTable not in self.addedTables:
+                    del self.addedRows[self.chosenTable][selItem.bottomRow()]
+                if ok:
+                    self.tableWidget.removeRow(selItem.bottomRow())
+                if ok and self.chosenTable in self.addedRows and not self.addedRows[self.chosenTable] and self.chosenTable not in self.addedTables:
                     action1 = self.tablesActionGroup.checkedAction()
                     self.tablesActionGroup.removeAction(action1)
                     self.tableMenu.removeAction(action1)
@@ -349,11 +362,11 @@ class DBeditor(QtWidgets.QMainWindow):
                     self.tableMenu.addAction(action2)
                     self.tableWidget.blockSignals(False)
         except SQLAlchemyError as error:
-            self.displayError(error.__dict__["orig"])
+            self.displayError(str(error))
 
     def addBottomRowDB(self) -> None:
         self.tableWidget.blockSignals(True)
-        selItems = self.tableWidget.selectedItems()
+        selItems = self.tableWidget.selectedRanges()
         if self.chosenTable not in self.addedRows and self.chosenTable not in self.addedTables:
             action1 = self.tablesActionGroup.checkedAction()
             self.tablesActionGroup.removeAction(action1)
@@ -362,11 +375,11 @@ class DBeditor(QtWidgets.QMainWindow):
             self.tablesActionGroup.addAction(action2)
             self.tableMenu.addAction(action2)
         if self.tableWidget.rowCount():
-            self.tableWidget.insertRow(selItems[-1].row() + 1)
+            self.tableWidget.insertRow(selItems[-1].bottomRow() + 1)
             if self.chosenTable not in self.addedRows:
-                self.addedRows[self.chosenTable] = {selItems[-1].row() + 1:{}}
+                self.addedRows[self.chosenTable] = {selItems[-1].bottomRow() + 1:{}}
             else:
-                self.addedRows[self.chosenTable][selItems[-1].row() + 1] = {}
+                self.addedRows[self.chosenTable][selItems[-1].bottomRow() + 1] = {}
         else:
             self.tableWidget.insertRow(0)
             self.addedRows[self.chosenTable] = {0:{}}
@@ -374,7 +387,7 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def addTopRowDB(self) -> None:
         self.tableWidget.blockSignals(True)
-        selItems = self.tableWidget.selectedItems()
+        selItems = self.tableWidget.selectedRanges()
         if self.chosenTable not in self.addedRows and self.chosenTable not in self.addedTables:
             action1 = self.tablesActionGroup.checkedAction()
             self.tablesActionGroup.removeAction(action1)
@@ -383,11 +396,11 @@ class DBeditor(QtWidgets.QMainWindow):
             self.tablesActionGroup.addAction(action2)
             self.tableMenu.addAction(action2)
         if self.tableWidget.rowCount():
-            self.tableWidget.insertRow(selItems[-1].row())
+            self.tableWidget.insertRow(selItems[-1].bottomRow())
             if self.chosenTable not in self.addedRows:
-                self.addedRows[self.chosenTable] = {selItems[-1].row() - 1:{}}
+                self.addedRows[self.chosenTable] = {selItems[-1].bottomRow() - 1:{}}
             else:
-                self.addedRows[self.chosenTable][selItems[-1].row() - 1] = {}
+                self.addedRows[self.chosenTable][selItems[-1].bottomRow() - 1] = {}
         else:
             self.tableWidget.insertRow(0)
             self.addedRows[self.chosenTable] = {0:{}}
@@ -402,7 +415,7 @@ class DBeditor(QtWidgets.QMainWindow):
                     self.insertRowsDB()
                 event.accept()
             except SQLAlchemyError as error:
-                reply = self.displayError(error.__dict__["orig"], True)
+                reply = self.displayError(str(error), True)
                 if reply == QtWidgets.QMessageBox.Cancel:
                     event.ignore()
                 else:
@@ -433,7 +446,7 @@ class DBeditor(QtWidgets.QMainWindow):
                 self.tablesActionGroup.addAction(action2)
                 self.tableMenu.addAction(action2)
             except SQLAlchemyError as error:
-                self.displayError(error.__dict__["orig"])
+                self.displayError(str(error))
 
     def executeCustomQuery(self) -> None:
         query = self.customQueryWindow.query.toPlainText()
@@ -457,7 +470,7 @@ class DBeditor(QtWidgets.QMainWindow):
             self.initTablesMenu(tables)
             self.initTable(self.chosenTable)
         except SQLAlchemyError as error:
-            self.displayError(error.__dict__["orig"])
+            self.customQueryWindow.displayError(str(error))
 
     def contextMenuEvent(self, event) -> None:
         if self._database:
@@ -547,6 +560,13 @@ class customQueryWindow(QtWidgets.QWidget):
         super().__init__()
         self.setupUi()
 
+    def displayError(self, err: str) -> None:
+        msg = QtWidgets.QMessageBox(self)
+        msg.setIcon(QtWidgets.QMessageBox.Critical)
+        msg.setWindowTitle("Error")
+        msg.setText(err)
+        return msg.exec_()
+
     def setupUi(self) -> None:
         self.setWindowTitle("Custom query window")
         self.resize(640, 300)
@@ -579,7 +599,14 @@ class addColumnWindow(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
-    
+        
+    def displayError(self, err: str) -> None:
+        msg = QtWidgets.QMessageBox(self)
+        msg.setIcon(QtWidgets.QMessageBox.Critical)
+        msg.setWindowTitle("Error")
+        msg.setText(err)
+        return msg.exec_()
+
     def unblockAutoinc(self) -> None:
         if self.pk.isChecked():
             self.autoinc.setDisabled(False)
