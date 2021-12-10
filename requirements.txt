@@ -1,2 +1,3 @@
 PyQt5~=5.15.6
 SQLAlchemy~=1.4.27
+openpyxl~=3.0.9

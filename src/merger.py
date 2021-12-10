@@ -3,7 +3,7 @@ from typing import List
 from sqlalchemy import Table
 from sqlalchemy.orm import Session, sessionmaker
 
-from loaders.abstract_loader import AbstractLoader, Row
+from src.loaders.abstract_loader import AbstractLoader, Row
 
 Batch = List[Row]
 
