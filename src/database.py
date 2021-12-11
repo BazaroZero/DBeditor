@@ -1,7 +1,8 @@
 from typing import List, Any, Dict, Tuple
 
 from sqlalchemy import create_engine, MetaData, Table, text, inspect
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, Result
+from sqlalchemy.engine.result import RMKeyView
 from sqlalchemy.orm import sessionmaker, Session
 
 
@@ -62,9 +63,10 @@ class Database:
             session.query(table).filter_by(**pks).update(new_values)
             session.commit()
 
-    def execute_raw(self, query: str, **args: Any) -> Tuple[Any, Any]:
+    def execute_raw(
+        self, query: str, **kwargs: Any
+    ) -> Tuple[RMKeyView, List[Any]]:
         statement = text(query).execution_options(autocommit=True)
-        with self.engine.connect() as connection:
-            data = connection.execute(statement, **args)
-            if data.returns_rows:
-                return data.keys(), data.all()
+        with self.session as session:
+            data: Result = session.execute(statement, kwargs)
+            return data.keys(), data.fetchall()

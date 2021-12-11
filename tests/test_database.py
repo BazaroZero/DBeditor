@@ -42,5 +42,8 @@ def test_update_row_exception(database: Database) -> None:
 
 
 def test_raw_execute(database: Database) -> None:
-    result = database.execute_raw("select name from first where id = :id", id=2)
+    keys, result = database.execute_raw(
+        "select name from first where id = :id", id=2
+    )
     assert list(result) == [("ipsum",)]
+    assert keys == ["name"]

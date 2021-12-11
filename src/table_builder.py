@@ -7,7 +7,9 @@ class TableBuilder:
     def __init__(self) -> None:
         self._columns: Dict[str, Column] = {}
 
-    def add_column(self, table: str, name: str, *args: Any, **kwargs: Any) -> None:
+    def add_column(
+        self, table: str, name: str, *args: Any, **kwargs: Any
+    ) -> None:
         if table not in self._columns:
             self._columns[table] = [Column(name, *args, **kwargs)]
         else:
