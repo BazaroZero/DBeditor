@@ -16,7 +16,7 @@ class TableBuilder:
         return map(lambda x: x.name, self._columns.values())  # type: ignore
 
     def add_column(self, column: Column) -> None:
-        """ Adds new column to table.
+        """Adds new column to table.
 
         :param column: new column to add
         :raises ValueError: if column with this name already exist.
@@ -26,7 +26,7 @@ class TableBuilder:
         self._columns[column.name] = column
 
     def build_table(self, meta: Optional[MetaData] = None) -> Table:
-        """ Creates a new table with columns that were added via
+        """Creates a new table with columns that were added via
         :meth:`~.TableBuilder.add_column`.
 
         :param meta: metadata context
@@ -39,7 +39,7 @@ class TableBuilder:
 
 # TODO: maybe inherit it from ``defaultdict``?
 class BuilderGroup:
-    """ Group of builder. Used for saving builder between operations. """
+    """Group of builder. Used for saving builder between operations."""
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -48,6 +48,9 @@ class BuilderGroup:
     def __contains__(self, table_name: str) -> bool:
         return table_name in self._builders
 
+    def __len__(self) -> int:
+        return len(self._builders)
+
     def __getitem__(self, table_name: str) -> TableBuilder:
         return self._builders[table_name]
 
@@ -55,7 +58,7 @@ class BuilderGroup:
         del self._builders[table_name]
 
     def start_building(self, table_name: str) -> None:
-        """ Creates new builder with ``table_name``. """
+        """Creates new builder with ``table_name``."""
 
         if table_name in self or table_name in self._engine.table_names():
             raise ValueError(f"Table with name '{table_name}' already exist.")
@@ -63,7 +66,7 @@ class BuilderGroup:
         self._builders[table_name] = TableBuilder(table_name)
 
     def create_table(self, table_name: str, meta: MetaData) -> None:
-        """ Creates table with name ``table_name``. """
+        """Creates table with name ``table_name``."""
 
         builder = self._builders.pop(table_name)
         builder.build_table(meta)

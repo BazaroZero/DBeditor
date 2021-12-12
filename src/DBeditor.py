@@ -286,7 +286,7 @@ class DBeditor(QtWidgets.QMainWindow):
             column = Column(
                 name=self.addColumnWindow.title.text(),
                 type_=translateTypes[self.addColumnWindow.type.currentText()],
-                **constraints
+                **constraints,
             )
             self._builder_group[self.chosenTable].add_column(column)
             self.initTable(self.chosenTable)
@@ -514,6 +514,7 @@ class DBeditor(QtWidgets.QMainWindow):
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self._database:
             try:
+                # TODO: save all tables
                 if len(self._builder_group) != 0:
                     self.addTablesDB()
                 if self.addedRows:

@@ -1,7 +1,13 @@
+from io import StringIO
+from typing import Union
+from pathlib import Path
+
 from openpyxl import load_workbook
 
-from src.loaders import ContentOrFilename
 from src.loaders.abstract_loader import AbstractLoader, Row
+
+
+ContentOrFilename = Union[str, Path, StringIO]
 
 
 class XLSLoader(AbstractLoader):

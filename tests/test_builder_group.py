@@ -15,9 +15,8 @@ def group(database: Database) -> BuilderGroup:
 
 
 @pytest.mark.parametrize(
-    "table_name, expected",
-    [("example", True), ("Lorem", False)]
- )
+    "table_name, expected", [("example", True), ("Lorem", False)]
+)
 def test_builder_group_contains(
     group: BuilderGroup, table_name: str, expected: bool
 ) -> None:
@@ -34,6 +33,10 @@ def test_builder_group_getitem(group: BuilderGroup) -> None:
 def test_builder_group_delitem(group: BuilderGroup) -> None:
     del group["example"]
     assert "example" not in group
+
+
+def test_builder_group_len(group: BuilderGroup) -> None:
+    assert len(group) == 1
 
 
 # FIXME: depends on contains
