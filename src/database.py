@@ -10,12 +10,16 @@ class Database:
     def __init__(self, path: str, *args: Any, **kwargs: Any) -> None:
         self._engine = create_engine(path, *args, **kwargs)
         self._metadata = MetaData()
-        self._metadata.reflect(bind=self._engine)
+        self._metadata.reflect(self._engine)
         self._session = sessionmaker(self._engine)
 
     @property
     def engine(self) -> Engine:
         return self._engine
+
+    @property
+    def metadata(self) -> MetaData:
+        return self._metadata
 
     @property
     def session(self) -> Session:
