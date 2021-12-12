@@ -54,12 +54,33 @@ class Database:
             session.query(table).filter_by(**pks).delete()
             session.commit()
 
+    def select_rowid(self, table_name: str) -> None:
+        statement = text(f"rowid FROM {table_name}")
+        with self.session as session:
+            return session.query(statement).all()
+
+    def delete_row_through_rowid(self, table_name: str, rowid: int) -> None:
+        table = self.get_table(table_name)
+        with self.session as session:
+            session.query(table).where(text(f"rowid = {rowid}")).delete()
+            session.commit()
+
     def update_row(
         self, table_name: str, pks: Dict[str, Any], new_values: Dict[str, Any]
     ) -> None:
         table = self.get_table(table_name)
         with self.session as session:
             session.query(table).filter_by(**pks).update(new_values)
+            session.commit()
+
+    def update_row_through_rowid(
+        self, table_name: str, rowid: int, new_values: Dict[str, Any]
+    ) -> None:
+        table = self.get_table(table_name)
+        with self.session as session:
+            session.query(table).where(text(f"rowid = {rowid}")).update(
+                new_values
+            )
             session.commit()
 
     def execute_raw(self, query: str, **args: Any) -> Tuple[Any, Any]:
