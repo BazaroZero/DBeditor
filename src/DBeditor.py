@@ -112,11 +112,10 @@ class DBeditor(QtWidgets.QMainWindow):
             try:
                 with open(filename) as file:
                     loader = CSVLoader(file)
-                    merger = Merger(
-                        self._database._session,
-                        self._database.get_table(self.chosenTable),
-                    )
-                    merger.merge(loader)
+                    merger = Merger(self._database.get_table(self.chosenTable))
+                    # FIXME: file closed during merge
+                    with self._database.session as s:
+                        merger.merge(s, loader)
                 self.initTable(self.chosenTable)
             except SQLAlchemyError as error:
                 self.displayError(error.__dict__["orig"])

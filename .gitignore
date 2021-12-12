@@ -9,6 +9,6 @@ venv/
 # Tests, linting, etc. cache
 **.mypy_cache/
 **.pytest_cache/
-**.sqlite
+/tests/assets/
 .coverage
 coverage.xml

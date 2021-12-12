@@ -1,7 +1,6 @@
 from io import StringIO
 
 import pytest
-from sqlalchemy.orm import Session
 
 from src.database import Database
 from src.loaders.csv_loader import CSVLoader
@@ -16,9 +15,9 @@ def csv_loader() -> CSVLoader:
 
 def test_merge(database: Database, csv_loader: CSVLoader) -> None:
     table = database.get_table("second")
-    merger = Merger(database.engine.connect(), table)
-    merger.merge(csv_loader)
-    with Session(database.engine) as s:
+    merger = Merger(table)
+    with database.session as s:
+        merger.merge(s, csv_loader)
         assert s.query(table).all() == [
             (1, 42, "example"),
             (2, 7, "lorem ipsum"),
