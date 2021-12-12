@@ -11,7 +11,7 @@ from sqlalchemy import types, Column
 from uri_builder import build_uri, DatabaseKind, Netloc
 from table_builder import BuilderGroup
 from loaders.csv_loader import CSVLoader
-from merger import Merger
+from src.loaders.merger import Merger
 
 
 class DBeditor(QtWidgets.QMainWindow):

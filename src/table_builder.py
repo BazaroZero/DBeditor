@@ -49,8 +49,6 @@ class BuilderGroup:
         return table_name in self._builders
 
     def __getitem__(self, table_name: str) -> TableBuilder:
-        if table_name not in self:
-            self._builders[table_name] = TableBuilder(table_name)
         return self._builders[table_name]
 
     def __delitem__(self, table_name: str) -> None:

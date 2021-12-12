@@ -4,7 +4,7 @@ import pytest
 
 from src.database import Database
 from src.loaders.csv_loader import CSVLoader
-from src.merger import Merger
+from src.loaders.merger import Merger
 
 
 @pytest.fixture
