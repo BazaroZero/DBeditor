@@ -12,7 +12,9 @@ ContentOrFilename = Union[str, Path, StringIO]
 
 class XLSLoader(AbstractLoader):
     def __init__(self, file: ContentOrFilename, worksheet: str) -> None:
-        self._workbook_iterator = iter(load_workbook(file)[worksheet])
+        self._workbook_iterator = iter(
+            load_workbook(file, data_only=True)[worksheet]
+        )
         self._header = list(
             map(lambda x: str(x.value), next(self._workbook_iterator))
         )

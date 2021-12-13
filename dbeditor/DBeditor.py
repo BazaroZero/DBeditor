@@ -11,6 +11,7 @@ from sqlalchemy import types, Column, MetaData
 from dbeditor.uri_builder import build_uri, DatabaseKind, Netloc
 from dbeditor.table_builder import BuilderGroup
 from dbeditor.loaders.csv_loader import CSVLoader
+from dbeditor.loaders.xls_loader import XLSLoader
 from dbeditor.loaders.merger import Merger
 
 
@@ -42,7 +43,7 @@ class DBeditor(QtWidgets.QMainWindow):
             self.chosenTable = ""
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
-        self.tableWidget.itemChanged.connect(self.editBDfunc)
+        self.tableWidget.itemChanged.connect(self.editDBfunc)
 
     def on_database_create(self) -> None:
         filename, _ = QtWidgets.QFileDialog.getSaveFileName(
@@ -61,7 +62,7 @@ class DBeditor(QtWidgets.QMainWindow):
         self.chosenTableLabel.setText("")
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
-        self.tableWidget.itemChanged.connect(self.editBDfunc)
+        self.tableWidget.itemChanged.connect(self.editDBfunc)
 
     def on_remote_connect(self) -> None:
         translateKind = {
@@ -94,7 +95,7 @@ class DBeditor(QtWidgets.QMainWindow):
             f"DBeditor - {self.remoteConnectionWindow.DBlocation.text()}"
         )
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
-        self.tableWidget.itemChanged.connect(self.editBDfunc)
+        self.tableWidget.itemChanged.connect(self.editDBfunc)
 
     def initRemoteConWindow(self) -> None:
         self.remoteConnectionWindow = remoteConnectionWindow()
@@ -104,28 +105,60 @@ class DBeditor(QtWidgets.QMainWindow):
         self.remoteConnectionWindow.show()
 
     def importCSV(self) -> None:
-        # FIXME: error on import to not opened dbs
-        if self.chosenTable not in self._builder_group:
-            filename, _ = QtWidgets.QFileDialog.getOpenFileName(
-                self.centralwidget,
-                "Select сsv",
-                "",
-                "*.csv",
-            )
-            if not filename:
-                return
-            try:
-                with open(filename) as file:
-                    loader = CSVLoader(file)
-                    merger = Merger(self._database.get_table(self.chosenTable))
-                    # FIXME: file closed during merge
-                    with self._database.session as s:
-                        merger.merge(s, loader)
-                self.initTable(self.chosenTable)
-            except SQLAlchemyError as error:
-                self.displayError(str(error))
-        else:
-            self.displayError("Save the table before importing the data")
+        if self._database:
+            if self.chosenTable not in self._builder_group:
+                filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+                    self.centralwidget,
+                    "Select сsv",
+                    "",
+                    "*.csv",
+                )
+                if not filename:
+                    return
+                try:
+                    with open(filename) as file:
+                        loader = CSVLoader(file)
+                        merger = Merger(
+                            self._database.get_table(self.chosenTable)
+                        )
+                        # FIXME: file closed during merge
+                        with self._database.session as s:
+                            merger.merge(s, loader)
+                    self.initTable(self.chosenTable)
+                except SQLAlchemyError as error:
+                    self.displayError(str(error))
+            else:
+                self.displayError("Save the table before importing the data")
+
+    def importXls(self) -> None:
+        if self._database:
+            if self.chosenTable not in self._builder_group:
+                filename, _ = QtWidgets.QFileDialog.getOpenFileName(
+                    self.centralwidget,
+                    "Select excel file",
+                    "",
+                    "*.xls, *.xlsx",
+                )
+                if not filename:
+                    return
+                worksheet, okPressed = QtWidgets.QInputDialog.getText(
+                    self, "Import xls", "Enter the title of the worksheet"
+                )
+                if okPressed and worksheet:
+                    try:
+                        with open(filename, "rb") as file:
+                            loader = XLSLoader(file, worksheet)
+                            merger = Merger(
+                                self._database.get_table(self.chosenTable)
+                            )
+                            # FIXME: file closed during merge
+                            with self._database.session as s:
+                                merger.merge(s, loader)
+                        self.initTable(self.chosenTable)
+                    except SQLAlchemyError as error:
+                        self.displayError(str(error))
+            else:
+                self.displayError("Save the table before importing the data")
 
     def initTablesMenu(self, tables: List[str]) -> None:
         if self.tablesMenuCreated:
@@ -171,7 +204,7 @@ class DBeditor(QtWidgets.QMainWindow):
             return out
         return False
 
-    def editBDfunc(self, item: QtWidgets.QTableWidgetItem) -> None:
+    def editDBfunc(self, item: QtWidgets.QTableWidgetItem) -> None:
         try:
             if self.chosenTable not in self._builder_group:
                 if (
@@ -567,7 +600,6 @@ class DBeditor(QtWidgets.QMainWindow):
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self._database:
             try:
-                # TODO: save all tables
                 if len(self._builder_group) != 0:
                     self.addTablesDB()
                 if self.addedRows:
@@ -711,6 +743,9 @@ class DBeditor(QtWidgets.QMainWindow):
             "Import data from CSV", self.centralwidget
         )
         self.saveTableAct = QtWidgets.QAction("Save table", self.centralwidget)
+        self.importXlsAct = QtWidgets.QAction(
+            "Import data from XLS", self.centralwidget
+        )
         self.addTableAct = QtWidgets.QAction("Add table", self.centralwidget)
         self.addColumnAct = QtWidgets.QAction("Add column", self.centralwidget)
         self.dropTableAct = QtWidgets.QAction("Drop table", self.centralwidget)
@@ -722,6 +757,7 @@ class DBeditor(QtWidgets.QMainWindow):
                 self.createDB,
                 self.remoteConAct,
                 self.importCsvAct,
+                self.importXlsAct,
                 self.saveTableAct,
             )
         )
@@ -743,6 +779,7 @@ class DBeditor(QtWidgets.QMainWindow):
         self.saveTableAct.triggered.connect(self.saveTableDB)
         self.remoteConAct.triggered.connect(self.initRemoteConWindow)
         self.importCsvAct.triggered.connect(self.importCSV)
+        self.importXlsAct.triggered.connect(self.importXls)
         self.addTableAct.triggered.connect(self.addTablesUI)
         self.addColumnAct.triggered.connect(self.initAddColumnWindow)
         self.dropTableAct.triggered.connect(self.dropTableDB)
