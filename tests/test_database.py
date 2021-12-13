@@ -41,6 +41,10 @@ def test_update_row_exception(database: Database) -> None:
         database.update_row("first", {"id": 1}, {"id": 2})
 
 
+def test_get_pk_column_names(database: Database) -> None:
+    assert database.get_pk_column_names("first") == ["id"]
+
+
 def test_raw_execute(database: Database) -> None:
     keys, result = database.execute_raw(
         "select name from first where id = :id", id=2

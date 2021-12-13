@@ -47,6 +47,17 @@ def test_builder_group_start_building(group: BuilderGroup) -> None:
     assert list(group["new_table"]) == []
 
 
+def test_builder_group_start_building_on_existing_table(
+    group: BuilderGroup,
+) -> None:
+    assert "new_table" not in group
+    group.start_building("new_table")
+    assert "new_table" in group
+    with pytest.raises(ValueError):
+        group.start_building("new_table")
+
+
+# FIXME: depends on contains
 def test_builder_group_create_table(
     group: BuilderGroup, database: Database
 ) -> None:

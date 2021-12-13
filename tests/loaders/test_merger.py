@@ -1,16 +1,6 @@
-from io import StringIO
-
-import pytest
-
 from src.database import Database
 from src.loaders.csv_loader import CSVLoader
 from src.loaders.merger import Merger
-
-
-@pytest.fixture
-def csv_loader() -> CSVLoader:
-    string = StringIO("amount,name\n42,example\n7,lorem ipsum")
-    return CSVLoader(string)
 
 
 def test_merge(database: Database, csv_loader: CSVLoader) -> None:
