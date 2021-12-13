@@ -1,7 +1,8 @@
-from typing import List, Any, Dict, Tuple
+from typing import List, Any, Dict, Tuple, Optional
 
 from sqlalchemy import create_engine, MetaData, Table, text, inspect
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, Result, Row
+from sqlalchemy.engine.result import RMKeyView
 from sqlalchemy.orm import sessionmaker, Session
 
 
@@ -9,12 +10,16 @@ class Database:
     def __init__(self, path: str, *args: Any, **kwargs: Any) -> None:
         self._engine = create_engine(path, *args, **kwargs)
         self._metadata = MetaData()
-        self._metadata.reflect(bind=self._engine)
+        self._metadata.reflect(self._engine)
         self._session = sessionmaker(self._engine)
 
     @property
     def engine(self) -> Engine:
         return self._engine
+
+    @property
+    def metadata(self) -> MetaData:
+        return self._metadata
 
     @property
     def session(self) -> Session:
@@ -54,8 +59,8 @@ class Database:
             session.query(table).filter_by(**pks).delete()
             session.commit()
 
-    def select_rowid(self, table_name: str) -> None:
-        statement = text(f"rowid FROM {table_name}")
+    def select_rowid(self, table_name: str) -> Row:
+        statement = text(f"rowid FROM {table_name} ORDER BY rowid ASC")
         with self.session as session:
             return session.query(statement).all()
 
@@ -83,9 +88,13 @@ class Database:
             )
             session.commit()
 
-    def execute_raw(self, query: str, **args: Any) -> Tuple[Any, Any]:
-        statement = text(query).execution_options(autocommit=True)
-        with self.engine.connect() as connection:
-            data = connection.execute(statement, **args)
+    def execute_raw(
+        self, query: str, **kwargs: Any
+    ) -> Optional[Tuple[RMKeyView, List[Any]]]:
+        statement = text(query)
+        with self.session as session:
+            data: Result = session.execute(statement, kwargs)
             if data.returns_rows:
                 return data.keys(), data.all()
+            else:
+                session.commit()

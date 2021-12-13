@@ -6,7 +6,7 @@ Row = Dict[str, Any]
 
 class AbstractLoader(ABC, Iterator[Row]):
     @abstractmethod
-    def load_next(self) -> Row:
+    def load_next(self) -> Row:  # pragma: no cover (abstract method)
         pass
 
     def __next__(self) -> Row:

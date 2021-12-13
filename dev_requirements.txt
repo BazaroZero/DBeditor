@@ -1,6 +1,7 @@
 PyQt5~=5.15.6
 PyQt5-stubs==5.15.2.0
 SQLAlchemy~=1.4.27
+openpyxl~=3.0.9
 
 black==21.11b0
 flake8==4.0.1

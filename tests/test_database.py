@@ -41,6 +41,23 @@ def test_update_row_exception(database: Database) -> None:
         database.update_row("first", {"id": 1}, {"id": 2})
 
 
-def test_raw_execute(database: Database) -> None:
-    result = database.execute_raw("select name from first where id = :id", id=2)
-    assert list(result) == [("ipsum",)]
+def test_get_pk_column_names(database: Database) -> None:
+    assert database.get_pk_column_names("first") == ["id"]
+
+
+def test_raw_execute_select(database: Database) -> None:
+    result = database.execute_raw("SELECT name FROM first WHERE id = :id", id=2)
+    assert result is not None
+    keys, data = result
+    assert list(data) == [("ipsum",)]
+    assert keys == ["name"]
+
+
+def test_raw_execute_update(database: Database) -> None:
+    database.execute_raw(
+        "UPDATE first SET name = :name WHERE id = :id", name="hello", id=2
+    )
+    assert database.select_all("first") == [
+        (1, "lorem"),
+        (2, "hello"),
+    ]
