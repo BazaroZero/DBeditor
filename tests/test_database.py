@@ -2,7 +2,7 @@ from sqlalchemy.exc import IntegrityError
 
 import pytest
 
-from src.database import Database
+from dbeditor.database import Database
 
 
 def test_get_tables(database: Database) -> None:

@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from src.loaders.csv_loader import CSVLoader
-from src.loaders.xls_loader import XLSLoader
+from dbeditor.loaders.csv_loader import CSVLoader
+from dbeditor.loaders.xls_loader import XLSLoader
 
 
 @pytest.fixture

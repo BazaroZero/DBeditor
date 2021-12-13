@@ -4,7 +4,7 @@ from pathlib import Path
 
 from openpyxl import load_workbook
 
-from src.loaders.abstract_loader import AbstractLoader, Row
+from dbeditor.loaders.abstract_loader import AbstractLoader, Row
 
 
 ContentOrFilename = Union[str, Path, StringIO]

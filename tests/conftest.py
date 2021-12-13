@@ -2,8 +2,8 @@ from sqlite3 import connect
 
 import pytest
 
-from src.database import Database
-from src.uri_builder import build_uri, DatabaseKind
+from dbeditor.database import Database
+from dbeditor.uri_builder import build_uri, DatabaseKind
 
 _SCRIPT = """
 CREATE TABLE first (

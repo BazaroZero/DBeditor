@@ -2,7 +2,7 @@ from typing import Optional
 
 import pytest
 
-from src.uri_builder import _get_protocol, DatabaseKind, build_uri, Netloc
+from dbeditor.uri_builder import _get_protocol, DatabaseKind, build_uri, Netloc
 
 
 @pytest.mark.parametrize(

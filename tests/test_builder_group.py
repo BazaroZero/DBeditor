@@ -1,8 +1,8 @@
 import pytest
 from sqlalchemy import Column, Integer
 
-from src.database import Database
-from src.table_builder import BuilderGroup
+from dbeditor.database import Database
+from dbeditor.table_builder import BuilderGroup
 
 
 @pytest.fixture

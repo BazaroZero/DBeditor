@@ -1,7 +1,7 @@
 from typing import Any, Iterable
 from csv import DictReader
 
-from src.loaders.abstract_loader import AbstractLoader, Row
+from dbeditor.loaders.abstract_loader import AbstractLoader, Row
 
 
 class CSVLoader(AbstractLoader):

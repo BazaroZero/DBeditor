@@ -4,14 +4,14 @@ from typing import List, Optional
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 
-from database import Database
+from dbeditor.database import Database
 from sqlalchemy.exc import SQLAlchemyError
 
 from sqlalchemy import types, Column, MetaData
-from uri_builder import build_uri, DatabaseKind, Netloc
-from table_builder import BuilderGroup
-from loaders.csv_loader import CSVLoader
-from src.loaders.merger import Merger
+from dbeditor.uri_builder import build_uri, DatabaseKind, Netloc
+from dbeditor.table_builder import BuilderGroup
+from dbeditor.loaders.csv_loader import CSVLoader
+from dbeditor.loaders.merger import Merger
 
 
 class DBeditor(QtWidgets.QMainWindow):
@@ -941,7 +941,7 @@ class settingsWindow(QtWidgets.QWidget):
         self.gridLayout.addWidget(self.pks, 2, 0, 1, 1)
 
 
-if __name__ == "__main__":
+def run():
     app = QtWidgets.QApplication(argv)
     ex = DBeditor()
     ex.show()

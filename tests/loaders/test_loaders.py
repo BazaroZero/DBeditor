@@ -1,6 +1,6 @@
-from src.database import Database
-from src.loaders import import_to_table
-from src.loaders.csv_loader import CSVLoader
+from dbeditor.database import Database
+from dbeditor.loaders import import_to_table
+from dbeditor.loaders.csv_loader import CSVLoader
 
 
 def test_import_to_table(database: Database, csv_loader: CSVLoader) -> None:

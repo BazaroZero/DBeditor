@@ -1,4 +1,4 @@
-from src.loaders.xls_loader import XLSLoader
+from dbeditor.loaders.xls_loader import XLSLoader
 
 ANSWER = [{"a": "a", "b": "123", "c": "b"}, {"a": "c", "b": "456", "c": "d"}]
 

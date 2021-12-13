@@ -1,6 +1,6 @@
-from src.database import Database
-from src.loaders.csv_loader import CSVLoader
-from src.loaders.merger import Merger
+from dbeditor.database import Database
+from dbeditor.loaders.csv_loader import CSVLoader
+from dbeditor.loaders.merger import Merger
 
 
 def test_merge(database: Database, csv_loader: CSVLoader) -> None:
