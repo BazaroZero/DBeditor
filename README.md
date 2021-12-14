@@ -21,7 +21,7 @@ python dbeditor.py
 
 ## Features
 - Menu file:
-    - Open database, create database and connect to remote database
+    - Open database (SQLite), create database (SQLite) and connect to remote database (MySQL or PostgreSQL)
     - Import data from csv and excel
     - Save added tables and inserted rows
 - Menu structure:
@@ -33,6 +33,6 @@ python dbeditor.py
 - Menu tables:
     - After opening the database, the menu will list your tables
 - Right-click context menu:
-    - Insert row before and after chosen one
+    - Insert row
     - Open custom query window (It's unable to query unsaved table)
     - Delete row 
