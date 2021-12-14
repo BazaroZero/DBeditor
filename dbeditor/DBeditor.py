@@ -33,14 +33,16 @@ class DBeditor(QtWidgets.QMainWindow):
             return
         self._database = Database(build_uri(DatabaseKind.SQLITE, filename))
         self._builder_group = BuilderGroup(self._database.engine)
-
         self.addedRows = {}
+        self.tableWidget.setColumnCount(0)
+        self.tableWidget.setRowCount(0)
         self.tables = self._database.get_tables()
         self.initTablesMenu(self.tables)
         if self.tables:
             self.initTable(self.tables[0])
         else:
             self.chosenTable = ""
+            self.chosenTableLabel.clear()
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editDBfunc)
@@ -57,10 +59,13 @@ class DBeditor(QtWidgets.QMainWindow):
         # TODO: create method for db reinit.
         self._database = Database(build_uri(DatabaseKind.SQLITE, filename))
         self._builder_group = BuilderGroup(self._database.engine)
-        self.addedRows = {}
+        self.addedRows, self.tables = {}, []
         self.initTablesMenu([])
-        self.chosenTableLabel.setText("")
+        self.chosenTable = ""
+        self.chosenTableLabel.clear()
         self.setWindowTitle(f"DBeditor - {os.path.basename(filename)}")
+        self.tableWidget.setColumnCount(0)
+        self.tableWidget.setRowCount(0)
         self.tableWidget.itemDoubleClicked.connect(self.saveItem)
         self.tableWidget.itemChanged.connect(self.editDBfunc)
 
@@ -81,21 +86,26 @@ class DBeditor(QtWidgets.QMainWindow):
             self.remoteConnectionWindow.DBlocation.text(),
             netlocation,
         )
-        self._database = Database(uri)
-        self._builder_group = BuilderGroup(self._database.engine)
-
-        self.addedRows = {}
-        self.tables = self._database.get_tables()
-        self.initTablesMenu(self.tables)
-        if self.tables:
-            self.initTable(self.tables[0])
-        else:
-            self.chosenTable = ""
-        self.setWindowTitle(
-            f"DBeditor - {self.remoteConnectionWindow.DBlocation.text()}"
-        )
-        self.tableWidget.itemDoubleClicked.connect(self.saveItem)
-        self.tableWidget.itemChanged.connect(self.editDBfunc)
+        try:
+            self._database = Database(uri)
+            self._builder_group = BuilderGroup(self._database.engine)
+            self.addedRows = {}
+            self.tableWidget.setColumnCount(0)
+            self.tableWidget.setRowCount(0)
+            self.tables = self._database.get_tables()
+            self.initTablesMenu(self.tables)
+            if self.tables:
+                self.initTable(self.tables[0])
+            else:
+                self.chosenTable = ""
+                self.chosenTableLabel.clear()
+            self.setWindowTitle(
+                f"DBeditor - {self.remoteConnectionWindow.DBlocation.text()}"
+            )
+            self.tableWidget.itemDoubleClicked.connect(self.saveItem)
+            self.tableWidget.itemChanged.connect(self.editDBfunc)
+        except SQLAlchemyError as error:
+            self.remoteConnectionWindow.displayError(error)
 
     def initRemoteConWindow(self) -> None:
         self.remoteConnectionWindow = remoteConnectionWindow()
@@ -300,13 +310,15 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def addColumnUI(self) -> None:
         if not self.addColumnWindow.title.text():
-            self.displayError("Enter title of the column")
+            self.addColumnWindow.displayError("Enter title of the column")
         elif (
             self.chosenTable in self._builder_group
             and self.addColumnWindow.title.text()
             in self._builder_group[self.chosenTable]
         ):
-            self.displayError("Column with this name already exists")
+            self.addColumnWindow.displayError(
+                "Column with this name already exists"
+            )
         else:
             translateConstraints = {
                 "Primary key": "primary_key",
@@ -326,7 +338,6 @@ class DBeditor(QtWidgets.QMainWindow):
                 "String": types.String,
             }
             constraints = {}
-            # self._builder_group.start_building(self.chosenTable)
             for btn in self.addColumnWindow.btnGroup.buttons():
                 if btn.isChecked():
                     constraints[translateConstraints[btn.text()]] = True
@@ -376,10 +387,7 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def initAddColumnWindow(self) -> None:
         if self._database:
-            if (
-                self.chosenTableLabel.text()
-                and self.chosenTable in self._builder_group
-            ):
+            if self.chosenTable in self._builder_group:
                 self.addColumnWindow = addColumnWindow()
                 self.addColumnWindow.add.clicked.connect(self.addColumnUI)
                 self.addColumnWindow.show()
@@ -405,13 +413,9 @@ class DBeditor(QtWidgets.QMainWindow):
                     QtWidgets.QTableWidgetItem(str(data[row][col])),
                 )
         if self.chosenTable in self.addedRows:
-            self.tableWidget.setRowCount(
-                self.tableWidget.rowCount()
-                + len(self.addedRows[self.chosenTable])
-            )
             for row in self.addedRows[self.chosenTable]:
                 self.tableWidget.insertRow(row)
-                for col in self.names:
+                for col in range(len(self.names)):
                     if col in self.addedRows[self.chosenTable][row]:
                         self.tableWidget.setItem(
                             row,
@@ -462,7 +466,7 @@ class DBeditor(QtWidgets.QMainWindow):
                 builder = self._builder_group[self.chosenTable]
                 for col in range(len(builder)):
                     self.tableWidget.setItem(
-                        1,
+                        0,
                         col,
                         QtWidgets.QTableWidgetItem(),
                     )
@@ -533,9 +537,8 @@ class DBeditor(QtWidgets.QMainWindow):
         except SQLAlchemyError as error:
             self.displayError(str(error))
 
-    def addBottomRowDB(self) -> None:
+    def addRowUI(self) -> None:
         self.tableWidget.blockSignals(True)
-        selItems = self.tableWidget.selectedRanges()
         if (
             self.chosenTable not in self.addedRows
             and self.chosenTable not in self._builder_group
@@ -552,46 +555,16 @@ class DBeditor(QtWidgets.QMainWindow):
             self.tablesActionGroup.addAction(action2)
             self.tableMenu.addAction(action2)
         if self.tableWidget.rowCount():
-            self.tableWidget.insertRow(selItems[-1].bottomRow() + 1)
+            self.tableWidget.insertRow(self.tableWidget.rowCount())
             if self.chosenTable not in self.addedRows:
                 self.addedRows[self.chosenTable] = {
-                    selItems[-1].bottomRow() + 1: {}
-                }
-            else:
-                self.addedRows[self.chosenTable][selItems[-1].row() + 1] = {}
-        else:
-            self.tableWidget.insertRow(0)
-            self.addedRows[self.chosenTable] = {0: {}}
-        self.tableWidget.blockSignals(False)
-
-    def addTopRowDB(self) -> None:
-        self.tableWidget.blockSignals(True)
-        selItems = self.tableWidget.selectedRanges()
-        if (
-            self.chosenTable not in self.addedRows
-            and self.chosenTable not in self._builder_group
-        ):
-            action1 = self.tablesActionGroup.checkedAction()
-            self.tablesActionGroup.removeAction(action1)
-            self.tableMenu.removeAction(action1)
-            action2 = QtWidgets.QAction(
-                self.chosenTable + "*",
-                self.menubar,
-                checkable=True,
-                checked=True,
-            )
-            self.tablesActionGroup.addAction(action2)
-            self.tableMenu.addAction(action2)
-        if self.tableWidget.rowCount():
-            self.tableWidget.insertRow(selItems[-1].bottomRow())
-            if self.chosenTable not in self.addedRows:
-                self.addedRows[self.chosenTable] = {
-                    selItems[-1].bottomRow() - 1: {}
+                    self.tableWidget.rowCount() - 1: {}
                 }
             else:
                 self.addedRows[self.chosenTable][
-                    selItems[-1].bottomRow() - 1
+                    self.tableWidget.rowCount() - 1
                 ] = {}
+            self.tableWidget.scrollToBottom()
         else:
             self.tableWidget.insertRow(0)
             self.addedRows[self.chosenTable] = {0: {}}
@@ -662,13 +635,8 @@ class DBeditor(QtWidgets.QMainWindow):
 
     def contextMenuEvent(self, event) -> None:
         if self._database:
-            self.addTopAct = QtWidgets.QAction(
-                "Add line on top", self.centralwidget
-            )
-            self.addBottomAct = QtWidgets.QAction(
-                "Add line below", self.centralwidget
-            )
-            self.delAct = QtWidgets.QAction("Delete", self.centralwidget)
+            self.addRowAct = QtWidgets.QAction("Add row", self.centralwidget)
+            self.delAct = QtWidgets.QAction("Delete row", self.centralwidget)
             self.contextMenu = QtWidgets.QMenu(self.centralwidget)
             if self.chosenTable not in self._builder_group:
                 self.customQueryAct = QtWidgets.QAction(
@@ -677,18 +645,14 @@ class DBeditor(QtWidgets.QMainWindow):
                 self.contextMenu.addAction(self.customQueryAct)
             else:
                 self.customQueryAct = -1
-            self.contextMenu.addActions(
-                (self.addTopAct, self.addBottomAct, self.delAct)
-            )
+            self.contextMenu.addActions((self.addRowAct, self.delAct))
             action = self.contextMenu.exec_(self.mapToGlobal(event.pos()))
             if action == self.delAct:
                 self.delRowDB()
             elif action == self.customQueryAct:
                 self.initCustomQueryWindow()
-            elif action == self.addTopAct:
-                self.addTopRowDB()
-            elif action == self.addBottomAct:
-                self.addBottomRowDB()
+            elif action == self.addRowAct:
+                self.addRowUI()
 
     def initCustomQueryWindow(self) -> None:
         self.customQueryWindow = CustomQueryWindow()
@@ -923,6 +887,13 @@ class remoteConnectionWindow(QtWidgets.QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setupUi()
+
+    def displayError(self, err: str) -> None:
+        msg = QtWidgets.QMessageBox(self)
+        msg.setIcon(QtWidgets.QMessageBox.Critical)
+        msg.setWindowTitle("Error")
+        msg.setText(err)
+        return msg.exec_()
 
     def setupUi(self) -> None:
         self.setWindowTitle("Remote connection")
